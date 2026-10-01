@@ -4,8 +4,6 @@ window.SITE = {
   role: 'Design engineer',
   year: 2026,
   email: 'reon.hypr@gmail.com',
-  timezone: 'Asia/Shanghai',
-  city: 'Shanghai',
   socials: [
     { label: 'X/Twitter', href: '#' },
     { label: 'Dribbble', href: '#' },

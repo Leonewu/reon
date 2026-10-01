@@ -216,22 +216,6 @@
   })();
 
   /* ---------- Small behaviours ---------- */
-  function initClock() {
-    let off = '';
-    try {
-      off = new Intl.DateTimeFormat('en-US', { timeZone: SITE.timezone, timeZoneName: 'shortOffset' })
-        .formatToParts(new Date()).find((p) => p.type === 'timeZoneName').value;
-    } catch (e) {}
-    $$('.js-offset').forEach((e) => { e.textContent = off ? `(${off})` : ''; });
-    $$('.js-city').forEach((e) => { e.textContent = SITE.city; });
-    let fmt;
-    try { fmt = new Intl.DateTimeFormat('en-GB', { timeZone: SITE.timezone, hour: '2-digit', minute: '2-digit', hour12: false }); }
-    catch (e) { fmt = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }); }
-    const tick = () => { const s = fmt.format(new Date()); $$('.js-time').forEach((e) => { e.textContent = s; }); };
-    tick();
-    setInterval(tick, 15000);
-  }
-
   function initScroll() {
     const header = $('.site-header'), bar = $('.progress i');
     let queued = false;
@@ -434,7 +418,6 @@
     if (page === 'project') renderProject();
     initContact();
     Art.init();
-    initClock();
     initScroll();
     initMenu();
     initLinks();

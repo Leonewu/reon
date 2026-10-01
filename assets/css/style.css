@@ -236,7 +236,7 @@ html:not(.js) .curtain, .curtain-failsafe .curtain { transform: translateY(-100%
 .hero-meta dt { margin-bottom: 4px; }
 .scroll-cue { display: none; }
 @media (min-width: 1024px) {
-  .hero-meta { grid-template-columns: repeat(4, minmax(0, 1fr)); padding-bottom: 32px; }
+  .hero-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); padding-bottom: 32px; }
   .scroll-cue { display: flex; justify-content: flex-end; align-items: flex-end; }
 }
 .scroll-cue a { display: inline-flex; gap: 8px; align-items: center; }
@@ -362,7 +362,7 @@ html:not(.js) .curtain, .curtain-failsafe .curtain { transform: translateY(-100%
 .contact-info dt { margin-bottom: 4px; }
 .socials { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 @media (min-width: 1024px) {
-  .contact-info { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .contact-info { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .to-top-wrap { display: flex; justify-content: flex-end; align-items: flex-end; }
 }
 .wordmark {
