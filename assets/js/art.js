@@ -3,7 +3,7 @@
   const TAU = Math.PI * 2;
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const DISPLAY = 'Archivo, "Helvetica Neue", Arial, sans-serif';
-  const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
+  const MONO = '"Geist Mono", ui-monospace, Menlo, monospace';
 
   const BAYER = [0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22, 3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25, 15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21].map((v) => (v + 0.5) / 64);
 
@@ -78,7 +78,7 @@
     ctx.fillStyle = '#4a4a4a'; ctx.fillRect(wx + 27.5 * u, wy + 3 * u, 12 * u, 0.6 * u);
 
     const k = Math.floor(t * 0.9) % 9;
-    const fills = ['#c4ff1a', '#2f6bff', '#ff5a36', '#efe9dc', '#7d5cff', '#18a058', '#ffd23f', '#e6e6e6', '#ff8fb1'];
+    const fills = ['#ff4d1a', '#2f6bff', '#9ad1ff', '#efe9dc', '#7d5cff', '#18a058', '#ffd23f', '#e6e6e6', '#ff8fb1'];
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
       const i = r * 3 + c;
       const x = wx + 24 * u + c * 22 * u, y = wy + 10 * u + r * 24 * u;
@@ -92,13 +92,13 @@
       ctx.restore();
       ctx.fillStyle = '#5a5a5a'; ctx.fillRect(x + 1.6 * u, y + 15 * u, 11 * u, 0.9 * u);
       ctx.fillStyle = '#3a3a3a'; ctx.fillRect(x + 1.6 * u, y + 17.5 * u, 7 * u, 0.9 * u);
-      if (i === k) { rr(ctx, x, y, 20 * u, 21 * u, 1.4 * u); ctx.lineWidth = 0.45 * u; ctx.strokeStyle = '#c4ff1a'; ctx.stroke(); }
+      if (i === k) { rr(ctx, x, y, 20 * u, 21 * u, 1.4 * u); ctx.lineWidth = 0.45 * u; ctx.strokeStyle = '#ff4d1a'; ctx.stroke(); }
     }
     const kc = k % 3, kr = Math.floor(k / 3);
     const px = wx + 24 * u + kc * 22 * u + 15 * u, py = wy + 10 * u + kr * 24 * u + 15 * u;
     ctx.save(); ctx.translate(px, py); ctx.scale(u, u);
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 6.4); ctx.lineTo(1.7, 4.8); ctx.lineTo(3, 7.6); ctx.lineTo(4, 7.1); ctx.lineTo(2.8, 4.4); ctx.lineTo(5, 4.4); ctx.closePath();
-    ctx.fillStyle = '#c4ff1a'; ctx.fill(); ctx.lineWidth = 0.4; ctx.strokeStyle = '#111'; ctx.stroke();
+    ctx.fillStyle = '#ff4d1a'; ctx.fill(); ctx.lineWidth = 0.4; ctx.strokeStyle = '#111'; ctx.stroke();
     ctx.restore();
   };
 
@@ -115,8 +115,8 @@
     const xh = ctx.measureText('x').actualBoundingBoxAscent || size * 0.52;
     const desc = ctx.measureText('g').actualBoundingBoxDescent || size * 0.2;
     const lines = [[base - cap, 'CAP'], [base - xh, 'X-HT'], [base, 'BASE'], [base + desc, 'DESC']];
-    ctx.strokeStyle = '#ff5a36'; ctx.lineWidth = Math.max(1, w / 500);
-    ctx.fillStyle = '#ff5a36'; ctx.font = `500 ${w * 0.022}px ${MONO}`;
+    ctx.strokeStyle = '#ff4d1a'; ctx.lineWidth = Math.max(1, w / 500);
+    ctx.fillStyle = '#ff4d1a'; ctx.font = `500 ${w * 0.022}px ${MONO}`;
     lines.forEach(([y, l]) => {
       ctx.beginPath(); ctx.moveTo(w * 0.05, y); ctx.lineTo(w * 0.95, y); ctx.stroke();
       ctx.fillText(l, w * 0.05, y - w * 0.01);
@@ -141,7 +141,7 @@
   ART.halftone = (ctx, w, h, t) => {
     const cx = 0.56 + Math.sin(t * 0.6) * 0.05, cy = 0.46 + Math.cos(t * 0.5) * 0.03, R = 0.3;
     const lx = -0.55 + Math.sin(t * 0.4) * 0.2, ly = -0.6;
-    dither(ctx, w, h, 110, [14, 14, 13], [196, 255, 26], (x, y) => {
+    dither(ctx, w, h, 110, [14, 14, 13], [255, 77, 26], (x, y) => {
       const dx = (x - cx) / R, dy = (y - cy) / R;
       const r2 = dx * dx + dy * dy;
       if (r2 < 1) {
@@ -213,7 +213,7 @@
     const c1 = 1.70158, c3 = c1 + 1;
     const curves = [
       ['cubic', '#111', ease],
-      ['back', '#ff5a36', (x) => 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2)],
+      ['back', '#ff4d1a', (x) => 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2)],
       ['spring', '#2f6bff', (x) => 1 - Math.exp(-6 * x) * Math.cos(12 * x)],
       ['expo', '#18a058', (x) => x === 1 ? 1 : 1 - Math.pow(2, -10 * x)]
     ];
@@ -234,15 +234,15 @@
 
   /* Lowtide Radio: player card with album art and waveform */
   ART.tidal = (ctx, w, h, t) => {
-    fill(ctx, w, h, '#ffd9c8');
+    fill(ctx, w, h, '#d9e4dd');
     const u = w / 100;
     const x = 16 * u, y = 12 * u, cw = 68 * u, ch = 100 * u;
-    ctx.save(); ctx.shadowColor = 'rgba(80,20,0,.28)'; ctx.shadowBlur = 8 * u; ctx.shadowOffsetY = 3 * u;
+    ctx.save(); ctx.shadowColor = 'rgba(20,50,30,.25)'; ctx.shadowBlur = 8 * u; ctx.shadowOffsetY = 3 * u;
     rr(ctx, x, y, cw, ch, 5 * u); ctx.fillStyle = '#121110'; ctx.fill(); ctx.restore();
     const ax = x + 6 * u, ay = y + 6 * u, as = cw - 12 * u;
     ctx.save(); rr(ctx, ax, ay, as, as * 0.78, 3 * u); ctx.clip();
     const gr = ctx.createLinearGradient(0, ay, 0, ay + as * 0.78);
-    gr.addColorStop(0, '#ff9a5a'); gr.addColorStop(0.55, '#ff5a36'); gr.addColorStop(1, '#5a1e8c');
+    gr.addColorStop(0, '#ff9a5a'); gr.addColorStop(0.55, '#ff4d1a'); gr.addColorStop(1, '#5a1e8c');
     ctx.fillStyle = gr; ctx.fillRect(ax, ay, as, as);
     ctx.beginPath(); ctx.arc(ax + as * 0.5, ay + as * 0.52, as * 0.2, 0, TAU); ctx.fillStyle = '#ffe2a8'; ctx.fill();
     ctx.fillStyle = '#3a145e';
@@ -251,14 +251,14 @@
     const ty = ay + as * 0.78 + 7 * u;
     ctx.fillStyle = '#f2f2f2'; rr(ctx, ax, ty, 30 * u, 2.4 * u, 1.2 * u); ctx.fill();
     ctx.fillStyle = '#6b6b6b'; rr(ctx, ax, ty + 4.5 * u, 19 * u, 1.8 * u, 0.9 * u); ctx.fill();
-    ctx.beginPath(); ctx.arc(ax + as - 4 * u, ty + 2 * u, 4.2 * u, 0, TAU); ctx.fillStyle = '#c4ff1a'; ctx.fill();
+    ctx.beginPath(); ctx.arc(ax + as - 4 * u, ty + 2 * u, 4.2 * u, 0, TAU); ctx.fillStyle = '#ff4d1a'; ctx.fill();
     ctx.fillStyle = '#111'; ctx.beginPath(); ctx.moveTo(ax + as - 5.2 * u, ty + 0.2 * u); ctx.lineTo(ax + as - 2.2 * u, ty + 2 * u); ctx.lineTo(ax + as - 5.2 * u, ty + 3.8 * u); ctx.fill();
     const wy = ty + 14 * u, n = 46, bw = as / n;
     const prog = 0.38 + (t * 0.03) % 0.6;
     for (let i = 0; i < n; i++) {
       const v = 0.25 + 0.75 * Math.abs(Math.sin(i * 0.55 + t * 3) * 0.6 + Math.sin(i * 0.17 + 1.3) * 0.4);
       const bh = v * 9 * u;
-      ctx.fillStyle = i / n < prog ? '#c4ff1a' : '#3b3b3b';
+      ctx.fillStyle = i / n < prog ? '#ff4d1a' : '#3b3b3b';
       ctx.fillRect(ax + i * bw, wy - bh / 2, bw * 0.55, bh);
     }
   };
@@ -292,7 +292,7 @@
       ctx.translate(cx - 12 * s, cy - 12 * s); ctx.scale(s, s);
       ctx.beginPath(); draw(ctx);
       ctx.lineWidth = 1.75; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.strokeStyle = i === hi ? '#c4ff1a' : '#f2f2f2'; ctx.stroke();
+      ctx.strokeStyle = i === hi ? '#ff4d1a' : '#f2f2f2'; ctx.stroke();
       ctx.restore();
     });
   };
@@ -311,7 +311,7 @@
       const px = cx + mx * Math.cos(rot) - my * Math.sin(rot), py = cy + mx * Math.sin(rot) + my * Math.cos(rot);
       const r = w * (0.045 + (moonFront ? 0.012 : 0));
       const g = ctx.createRadialGradient(px - r * 0.4, py - r * 0.4, r * 0.1, px, py, r);
-      g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#c4ff1a');
+      g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#ff4d1a');
       ctx.beginPath(); ctx.arc(px, py, r, 0, TAU); ctx.fillStyle = g; ctx.fill();
     };
     const ring = (from, to) => {
@@ -381,24 +381,6 @@
     ctx.fillText('VOL. 01', m + gw * 5, h * 0.95);
   };
 
-  /* About portrait placeholder: dithered sphere */
-  ART.avatar = (ctx, w, h, t) => {
-    const lx = -0.6 + Math.sin(t * 0.5) * 0.15;
-    dither(ctx, w, h, 96, [6, 32, 31], [128, 238, 210], (x, y) => {
-      const dx = (x - 0.5) / 0.34, dy = (y - 0.47) / 0.34;
-      const r2 = dx * dx + dy * dy;
-      const vign = 0.18 * (1 - Math.hypot(x - 0.3, y - 0.2));
-      if (r2 < 1) {
-        const z = Math.sqrt(1 - r2);
-        const rim = Math.pow(1 - z, 3) * 0.35;
-        return clamp(Math.max(0, dx * lx + dy * -0.55 + z * 0.55) * 0.95 + rim);
-      }
-      return clamp(vign);
-    });
-    ctx.fillStyle = '#80eed2';
-    ctx.font = `500 ${w * 0.035}px ${MONO}`;
-    ctx.fillText('R—01 / SELF', w * 0.05, h * 0.94);
-  };
 
   // starting time per art, picked so the static frame looks composed
   ART.defaults = { motion: 1.55, pictogram: 3.2, palette: 18.4, zine: 4.3, orbit: 0.4 };

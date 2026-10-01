@@ -1,23 +1,23 @@
 /* Site content — edit everything about reon here. */
 window.SITE = {
   name: 'reon',
+  role: 'Design engineer',
   year: 2026,
   email: 'reon.hypr@gmail.com',
   timezone: 'Asia/Shanghai',
-  city: 'SHA',
+  city: 'Shanghai',
   socials: [
     { label: 'X/Twitter', href: '#' },
     { label: 'Dribbble', href: '#' },
     { label: 'GitHub', href: '#' }
   ],
 
-  /* Order matters: the work grid lays cards out in a repeating 10-slot mosaic. */
+  /* Shown in this order in the work index. */
   projects: [
     {
       slug: 'fieldnote',
       title: 'Fieldnote™',
       year: '2024–2026',
-      tag: 'Coding Project',
       art: 'fieldnote',
       role: 'Founder, design & engineering',
       type: 'Product',
@@ -32,7 +32,6 @@ window.SITE = {
       slug: 'kiln',
       title: 'Kiln Display',
       year: '2025',
-      tag: 'Typeface',
       art: 'kiln',
       role: 'Type design',
       type: 'Variable font',
@@ -47,7 +46,6 @@ window.SITE = {
       slug: 'halftone-lab',
       title: 'Halftone Lab',
       year: '2025',
-      tag: 'Coding Project',
       art: 'halftone',
       role: 'Design & engineering',
       type: 'Web tool',
@@ -62,7 +60,6 @@ window.SITE = {
       slug: 'palette-forge',
       title: 'Palette Forge',
       year: '2024',
-      kind: 'tools',
       art: 'palette',
       role: 'Design & engineering',
       type: 'Figma plugin',
@@ -77,7 +74,6 @@ window.SITE = {
       slug: 'motion-kit',
       title: 'Motion Kit',
       year: '2023',
-      kind: 'tools',
       art: 'motion',
       role: 'Design & engineering',
       type: 'Library',
@@ -134,7 +130,6 @@ window.SITE = {
       slug: 'motion-as-material',
       title: 'Talk: Motion as Material',
       year: '2022',
-      kind: 'event',
       art: 'talk',
       role: 'Speaker',
       type: 'Talk',
@@ -149,7 +144,6 @@ window.SITE = {
       slug: 'grid-systems-zine',
       title: 'Zine: Grid Systems',
       year: '2021',
-      kind: 'print',
       art: 'zine',
       role: 'Editor & designer',
       type: 'Publication',
