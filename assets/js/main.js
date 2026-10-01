@@ -3,7 +3,7 @@
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const root = document.documentElement;
   const SITE = window.SITE;
-  const Contour = window.Contour || { setDark() {} };
+  const Backdrop = window.Backdrop || { refresh() {} };
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const page = document.body.dataset.page;
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -71,9 +71,7 @@
         b.setAttribute('aria-label', `Color theme: ${this.labels[this.mode]}. Click to change.`);
       });
       $$('.js-theme-label').forEach((e) => { e.textContent = this.labels[this.mode]; });
-      const meta = $('meta[name="theme-color"]');
-      if (meta) meta.content = dark ? '#121210' : '#f3f0e8';
-      Contour.setDark(dark, instant);
+      syncColors(instant);
     },
     cycle() {
       this.mode = this.modes[(this.modes.indexOf(this.mode) + 1) % this.modes.length];
@@ -86,6 +84,16 @@
       $$('.js-theme').forEach((b) => b.addEventListener('click', () => this.cycle()));
     }
   };
+
+  // push the current palette to everything drawn outside CSS
+  function syncColors(instant) {
+    const cs = getComputedStyle(root);
+    const meta = $('meta[name="theme-color"]');
+    if (meta) meta.content = `rgb(${cs.getPropertyValue('--paper-rgb').trim().split(/\s+/).join(',')})`;
+    if (window.ART) window.ART.accent = cs.getPropertyValue('--accent').trim();
+    Backdrop.refresh(instant);
+    if (Art.items.length) Art.redraw();
+  }
 
   /* ---------- Reveal on scroll ---------- */
   const Reveal = {
