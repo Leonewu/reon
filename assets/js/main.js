@@ -431,7 +431,7 @@
     initLinks();
 
     Curtain.progress(0.2);
-    const fontList = ['500 40px Geist', '400 16px "Geist Mono"', 'italic 400 40px "Instrument Serif"', '800 40px Archivo'];
+    const fontList = ['600 40px "Instrument Sans"', '400 16px Montserrat', '400 16px "Geist Mono"', 'italic 400 40px "Instrument Serif"'];
     const fonts = (document.fonts ? Promise.all(fontList.map((f) => document.fonts.load(f).catch(() => {}))) : Promise.resolve())
       .then(() => Curtain.progress(0.7));
     const loaded = (document.readyState === 'complete' ? Promise.resolve() : new Promise((r) => addEventListener('load', r, { once: true })))
