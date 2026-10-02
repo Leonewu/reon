@@ -27,6 +27,7 @@
         <nav class="nav" aria-label="Primary">
           <a class="nav-link" href="index.html#about" data-section="about"><span class="u">About</span></a>
           <a class="nav-link" href="index.html#work" data-section="work"><span class="u">Work</span></a>
+          <a class="nav-link${page === 'studio' ? ' is-active' : ''}" href="studio.html"><span class="u">Studio</span></a>
           <a class="nav-link" href="index.html#contact" data-section="contact"><span class="u">Contact</span></a>
           ${themeBtn}
         </nav>
@@ -36,7 +37,8 @@
         <nav class="menu-nav" aria-label="Mobile">
           <a href="index.html#about"><span class="label">01</span>About</a>
           <a href="index.html#work"><span class="label">02</span>Work</a>
-          <a href="index.html#contact"><span class="label">03</span>Contact</a>
+          <a href="studio.html"><span class="label">03</span>Studio</a>
+          <a href="index.html#contact"><span class="label">04</span>Contact</a>
         </nav>
         <div class="menu-foot">${themeBtn}<a class="js-email-plain"></a></div>
       </div>`);

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Studio — reon</title>
+  <meta name="description" content="Studio: ten interactive experiments in light, glass and type by reon.">
+  <meta name="theme-color" content="#e4e9ec">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Instrument+Sans:wdth,wght@75..100,400..700&family=Instrument+Serif:ital@1&family=Montserrat:wght@300..700&family=Quicksand:wght@300..700&family=Fredoka:wdth,wght@75..125,300..700&family=Pacifico&family=Borel&family=Playpen+Sans:wght@100..800&family=Sour+Gummy:wdth,wght@100..125,100..900&family=Titan+One&family=Cherry+Bomb+One&family=Comfortaa:wght@300..700&family=Grandstander:wght@100..900&family=Noto+Sans+SC:wght@100..900&display=swap">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/studio.css">
+  <script>
+    (function () {
+      var r = document.documentElement, m = 'auto';
+      try { m = localStorage.getItem('reon-theme') || 'auto'; } catch (e) {}
+      var d = m === 'dark' || (m === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+      r.setAttribute('data-theme', d ? 'dark' : 'light');
+      r.setAttribute('data-theme-mode', m);
+      r.classList.add('js');
+      setTimeout(function () { r.classList.add('curtain-failsafe'); }, 7000);
+    })();
+  </script>
+</head>
+<body data-page="studio">
+  <div class="curtain" aria-hidden="true"><span class="curtain-mark">reon<i>.</i></span><span class="curtain-count">000</span></div>
+
+  <main id="studio">
+    <section class="p-head">
+      <div class="p-crumbs label"><a class="u" href="index.html">← Home</a><span>10 experiments</span></div>
+      <h1 class="p-title" data-reveal="lines"><span class="line"><span>Studio</span></span></h1>
+      <p class="p-summary" data-reveal style="--d:150ms">A playground for light, glass and type. Everything here is built from scratch in the browser, so move, swipe and click: each piece reacts.</p>
+    </section>
+
+    <div class="studio-grid">
+      <article class="fx" data-reveal>
+        <div class="stage" id="fx-glass"><canvas></canvas><span class="hint">Move to tilt the word and stir the light</span></div>
+        <div class="glass-tools">
+          <label class="glass-input"><span class="label">Text</span><input type="text" value="reon" spellcheck="false" autocomplete="off" aria-label="Text to render as glass"></label>
+          <div class="font-chips" role="radiogroup" aria-label="Font"></div>
+        </div>
+        <div class="fx-meta">
+          <span class="label">01</span>
+          <h2>Glass type<span class="label">shader · sdf</span></h2>
+          <p>Type anything and pick a font. The letters are turned into a distance field and wrapped into glass in a shader: thin fonts grow into round tubes, heavy ones puff up like balloons. Light bends through them, splits into colour and catches star-shaped glints.</p>
+          <p>All ten fonts are open source (OFL). Long text wraps onto more lines; Chinese falls back to Noto Sans SC.</p>
+        </div>
+      </article>
+      <article class="fx" data-reveal>
+        <div class="stage" id="fx-beams"><canvas></canvas><span class="hint">Swipe across the light</span></div>
+        <div class="fx-meta">
+          <span class="label">02</span>
+          <h2>Light push<span class="label">fluid</span></h2>
+          <p>A hidden fluid simulation bends slanted beams of light instead of drawing smoke: swipe and the rays smear, fringe into red, green and blue, and leave a glow that slowly settles.</p>
+          <p>Technique: Jos Stam’s Stable Fluids (1999), used here only to displace the image.</p>
+        </div>
+      </article>
+      <article class="fx" data-reveal>
+        <div class="stage scramble" id="fx-scramble">
+          <span class="sl" data-text="Designing & building"></span>
+          <span class="sl" data-text="calm software,"></span>
+          <span class="sl" data-text="sketch to ship."></span>
+          <span class="hint">Click to replay · hover a line</span>
+        </div>
+        <div class="fx-meta">
+          <span class="label">03</span>
+          <h2>Text scramble<span class="label">dom</span></h2>
+          <p>Letters arrive as coloured noise and settle one by one, line after line.</p>
+          <p>A terminal-era trope; Justin Windle’s Text Scramble on CodePen is the classic web reference.</p>
+        </div>
+      </article>
+      <article class="fx" data-reveal>
+        <div class="stage" id="fx-smoke"><canvas></canvas><span class="hint">Swipe quickly</span></div>
+        <div class="fx-meta">
+          <span class="label">04</span>
+          <h2>Fluid dye<span class="label">fluid</span></h2>
+          <p>The same solver, this time pouring coloured light into the flow: it curls, spreads and pushes the type behind it apart.</p>
+          <p>Pavel Dobryakov’s open-source WebGL Fluid Simulation made this look popular on the web.</p>
+        </div>
+      </article>
+      <article class="fx" data-reveal>
+        <div class="stage" id="fx-flare"><canvas></canvas><span class="hint">Move the light · hide it behind the towers</span></div>
+        <div class="fx-meta">
+          <span class="label">05</span>
+          <h2>Lens flare<span class="label">shader</span></h2>
+          <p>The light follows the cursor: a hot core, star rays, a horizontal streak, hexagonal ghosts and a chromatic halo. Hide it behind the towers and it dims.</p>
+          <p>It imitates what real lenses do when they are pointed at something bright.</p>
+        </div>
+      </article>
+      <article class="fx" data-reveal>
+        <div class="stage vf" id="fx-vf">
+          <span class="vl">Quiet tools</span>
+          <span class="vl">for loud ideas.</span>
+          <span class="hint">Move near the letters</span>
+        </div>
+        <div class="fx-meta">
+          <span class="label">06</span>
+          <h2>Variable type<span class="label">font axes</span></h2>
+          <p>Instrument Sans has weight and width axes: letters near the cursor swell, widen and turn amber. Leave, and a slow wave runs through the line.</p>
+          <p>Variable fonts have worked in every major browser since 2018.</p>
+        </div>
+      </article>
+      <article class="fx" data-reveal>
+        <div class="stage" id="fx-ascii"><canvas></canvas><span class="hint">Your cursor is a lamp · click for a ripple</span></div>
+        <div class="fx-meta">
+          <span class="label">07</span>
+          <h2>ASCII light<span class="label">canvas</span></h2>
+          <p>A moving field of light, redrawn as characters: the brighter it is, the denser the glyph. The cursor is a lamp and a click sends out a ripple.</p>
+          <p>A nod to the ASCII art of early computers.</p>
+        </div>
+      </article>
+      <article class="fx" data-reveal>
+        <div class="stage tilt" id="fx-tilt">
+          <div class="tcard"><div class="tc-art"><span>F.</span></div><div class="tc-foil"></div><div class="tc-glare"></div><div class="tc-meta"><b>Fieldnote™</b><span>2024–26</span></div></div>
+          <div class="tcard"><div class="tc-art"><span>K.</span></div><div class="tc-foil"></div><div class="tc-glare"></div><div class="tc-meta"><b>Kiln Display</b><span>2025</span></div></div>
+          <span class="hint">Hover a card</span>
+        </div>
+        <div class="fx-meta">
+          <span class="label">08</span>
+          <h2>Tilt &amp; glare<span class="label">css 3d</span></h2>
+          <p>Cards lean toward the cursor, lift a little and catch a moving highlight and a holographic sheen, like something you could hold.</p>
+        </div>
+      </article>
+      <article class="fx" data-reveal>
+        <div class="stage" id="fx-dots"><canvas></canvas><span class="hint">Move · click for a shockwave</span></div>
+        <div class="fx-meta">
+          <span class="label">09</span>
+          <h2>Magnetic dots<span class="label">springs</span></h2>
+          <p>A grid of dots on springs: the cursor pushes them away and lights them up, and a click sends out a shockwave.</p>
+        </div>
+      </article>
+      <article class="fx" data-reveal>
+        <div class="stage" id="fx-pixels"><canvas></canvas><span class="hint">Click anywhere to switch page</span></div>
+        <div class="fx-meta">
+          <span class="label">10</span>
+          <h2>Pixel dissolve<span class="label">transition</span></h2>
+          <p>From wherever you click, one page dissolves into the next cell by cell, with a bright seam along the edge.</p>
+          <p>A nod to the transitions of early video games and TV.</p>
+        </div>
+      </article>
+    </div>
+
+    <section class="section">
+      <header class="section-head"><span class="label">(—)</span><span class="label">Further play</span></header>
+      <div class="studio-links">
+        <a href="https://paveldogreat.github.io/WebGL-Fluid-Simulation/" target="_blank" rel="noopener noreferrer"><b>WebGL Fluid Simulation ↗</b><small>Pavel Dobryakov’s fluid demo, with every parameter exposed.</small></a>
+        <a href="https://tympanus.net/codrops/" target="_blank" rel="noopener noreferrer"><b>Codrops ↗</b><small>Tutorials and interactive demos: text effects, hovers, WebGL transitions.</small></a>
+        <a href="https://shaders.paper.design/" target="_blank" rel="noopener noreferrer"><b>Paper Shaders ↗</b><small>Ready-made web shaders you can tune in the browser.</small></a>
+        <a href="https://www.unicorn.studio/" target="_blank" rel="noopener noreferrer"><b>Unicorn Studio ↗</b><small>WebGL effects without code.</small></a>
+        <a href="https://www.shadertoy.com/" target="_blank" rel="noopener noreferrer"><b>Shadertoy ↗</b><small>A community of shaders; almost every graphics trick has an example here.</small></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="mini-footer label">
+    <span>© 2026 reon</span>
+    <a class="u js-email-plain" href="#"></a>
+  </footer>
+
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/main.js"></script>
+  <script src="assets/js/studio.js"></script>
+</body>
+</html>
