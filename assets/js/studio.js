@@ -294,8 +294,18 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
     const MODES = [
       { key: 'pop', name: 'A · Letter by letter', note: 'letters inflate in turn' },
       { key: 'trace', name: 'B · Traced strokes', note: 'strokes worked out from the font' },
-      { key: 'order', name: 'C · Stroke order', note: 'single-line hand, real Chinese order' }
+      { key: 'order', name: 'C · Stroke order', note: 'single-line hand, real Chinese order' },
+      { key: 'script', name: 'D · Script', note: 'stroke templates for four script fonts' }
     ];
+    // D: stroke templates from Vara.js (MIT), drawn for these open-source script fonts.
+    // Each character is a list of pen paths in writing order.
+    const SCRIPTS = [
+      { key: 'v-pacifico', name: 'Pacifico', note: 'retro script', css: 'Pacifico', file: 'Pacifico/PacificoSLO.json', gap: 0 },
+      { key: 'v-parisienne', name: 'Parisienne', note: 'elegant', css: 'Parisienne', file: 'Parisienne/Parisienne.json', gap: 0 },
+      { key: 'v-satisfy', name: 'Satisfy', note: 'casual', css: 'Satisfy', file: 'Satisfy/SatisfySL.json', gap: 0 },
+      { key: 'v-shadows', name: 'Shadows Into Light', note: 'marker', css: 'Shadows Into Light', file: 'Shadows-Into-Light/shadows-into-light.json', gap: 0.3 }
+    ];
+    let script = SCRIPTS[0];
     let font = FONTS[0], mode = MODES[1];
     let R = 0.085, GROW = 0.085, geo = null, anim = null;
 
@@ -554,6 +564,82 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
       out.push(P[P.length - 1]);
       return out;
     }
+    const varaCache = new Map();
+    function loadVara(file) {
+      if (!varaCache.has(file)) varaCache.set(file, fetch(`https://cdn.jsdelivr.net/npm/vara@1.4.0/fonts/${file}`).then((r) => (r.ok ? r.json() : null)).catch(() => null));
+      return varaCache.get(file);
+    }
+    function sampler() {
+      if (!svgPath) {
+        const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+        svgPath = document.createElementNS(NS, 'path');
+        svg.appendChild(svgPath); document.body.appendChild(svg);
+      }
+      return svgPath;
+    }
+    // one character of a Vara font → strokes in font units (y down, baseline 0), ink starting at x = 0
+    function varaGlyph(data, ch, cacheKey) {
+      const k = cacheKey + ch;
+      if (handCache.has(k)) return handCache.get(k);
+      const c = data.c[ch.codePointAt(0)];
+      let out = null;
+      if (c && c.paths && c.paths.length) {
+        const el = sampler();
+        const strokes = c.paths.map((pth) => {
+          el.setAttribute('d', pth.d);
+          const L = el.getTotalLength(), n = Math.max(1, Math.ceil(L / 0.3)), pts = [];
+          for (let i = 0; i <= n; i++) { const q = el.getPointAtLength(L * i / n); pts.push([q.x + pth.mx, q.y - pth.my]); }
+          return pts;
+        });
+        let x0 = Infinity, x1 = -Infinity;
+        for (const st of strokes) for (const [x] of st) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+        out = { adv: x1 - x0, strokes: strokes.map((st) => st.map(([x, y]) => [x - x0, y])) };
+      }
+      handCache.set(k, out);
+      return out;
+    }
+    async function layoutScript(text) {
+      if (!text) return emptyGeo('script');
+      const data = await loadVara(script.file);
+      if (!data) return emptyGeo('script');
+      const P = data.p, gap = P.space * script.gap;
+      const glyphs = new Map();
+      await Promise.all([...new Set(Array.from(text))].map(async (ch) => {
+        if (CJK.test(ch)) {
+          // Chinese has no script templates: borrow the real stroke order, scaled to fit
+          const h = await hanziGlyph(ch), k = P.tf / 760;
+          glyphs.set(ch, h && { adv: h.adv * k, strokes: h.strokes.map((st) => st.map(([x, y]) => [x * k, y * k])) });
+        } else glyphs.set(ch, varaGlyph(data, ch, script.key));
+      }));
+      const adv = (ch) => (ch === ' ' ? P.space : glyphs.get(ch) ? glyphs.get(ch).adv + gap : P.space * 0.5);
+      const advance = (str) => Array.from(str).reduce((w, ch) => w + adv(ch), 0) * 100 / P.lh;
+      const lh = 118;
+      const best = fitLines(text, advance, advance, lh, 0);
+      const F = Math.max(10, best.fs), sc = F / P.lh, step = lh * F / 100;
+      const strokes = [], lines = [];
+      best.lines.forEach((line, i) => {
+        const cy = DH / 2 + (i - (best.lines.length - 1) / 2) * step, mine = [];
+        let pen = (DW - advance(line) * F / 100) / 2;
+        for (const ch of Array.from(line)) {
+          const g = glyphs.get(ch);
+          if (g) for (const st of g.strokes) mine.push(st.map(([x, y]) => [pen + x * sc, y * sc]));
+          pen += adv(ch) * sc;
+        }
+        // centre each line's ink on its slot
+        let y0 = Infinity, y1 = -Infinity;
+        for (const st of mine) for (const [, y] of st) { y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+        const dy = cy - (y0 + y1) / 2;
+        for (const st of mine) strokes.push(st.map(([x, y]) => [x, y + dy]));
+        lines.push({ cy });
+      });
+      cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, DW, DH);
+      cx.strokeStyle = '#fff'; cx.lineWidth = 3; cx.lineCap = 'round'; cx.lineJoin = 'round';
+      for (const st of strokes) { cx.beginPath(); st.forEach(([x, y], k) => (k ? cx.lineTo(x, y) : cx.moveTo(x, y))); cx.stroke(); }
+      return { kind: 'script', mask: readMask(), fs: F, cjk: false, slant: 0, lines, T: 0.042 * F, strokes };
+    }
+
     async function layoutHand(text) {
       if (!text) return emptyGeo('hand');
       const glyphs = new Map();
@@ -1135,6 +1221,7 @@ void main() {
       anim = null;
       let g;
       if (mode.key === 'order') g = await layoutHand(text);
+      else if (mode.key === 'script') g = await layoutScript(text);
       else {
         if (text) { try { await document.fonts.load(fontFor(CJK.test(text)), text); } catch (e) {} }
         if (id !== buildId) return false;
@@ -1146,13 +1233,15 @@ void main() {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, DW, DH, 0, gl.RED, gl.FLOAT, g.field);
       R = g.rPx * PX; GROW = g.growPx * PX;
       g.anims = {};
+      g.font = g.kind === 'script' ? script.key : font.key;
       geo = g;
       return true;
     }
     let ready = rebuild();
     async function play() {
       await ready;
-      const want = mode.key === 'order' ? 'hand' : 'font';
+      const want = mode.key === 'order' ? 'hand' : mode.key === 'script' ? 'script' : 'font';
+      if (geo && geo.kind === want && want === 'script' && geo.font !== script.key) { ready = rebuild(); if (!(await ready)) return; }
       if (!geo || geo.kind !== want) { ready = rebuild(); if (!(await ready)) return; }
       const g = geo;
       if (!(mode.key in g.anims)) {
@@ -1169,9 +1258,16 @@ void main() {
     function dropdown(root, label, items, value, onChange) {
       const id = root.dataset.dd;
       root.innerHTML = `<button class="dd-btn" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="label">${label}</span><span class="dd-val"></span><svg class="dd-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
-        + `<ul class="dd-list" role="listbox" tabindex="-1" aria-label="${label}" hidden>${items.map((it) => `<li role="option" id="${id}-${it.key}" data-k="${it.key}"><b style="${it.style || ''}">${it.name}</b><small>${it.note}</small></li>`).join('')}</ul>`;
-      const btn = root.querySelector('.dd-btn'), list = root.querySelector('.dd-list'), val = root.querySelector('.dd-val'), opts = [...list.children];
-      let cur = Math.max(0, items.findIndex((it) => it.key === value)), active = cur, override = '';
+        + `<ul class="dd-list" role="listbox" tabindex="-1" aria-label="${label}" hidden></ul>`;
+      const btn = root.querySelector('.dd-btn'), list = root.querySelector('.dd-list'), val = root.querySelector('.dd-val');
+      let opts = [], cur = 0, active = 0, override = '';
+      const fill = (next, v) => {
+        items = next;
+        list.innerHTML = items.map((it) => `<li role="option" id="${id}-${it.key}" data-k="${it.key}"><b style="${it.style || ''}">${it.name}</b><small>${it.note}</small></li>`).join('');
+        opts = [...list.children];
+        cur = active = Math.max(0, items.findIndex((it) => it.key === v));
+      };
+      fill(items, value);
       const render = () => {
         const it = items[cur];
         val.innerHTML = override ? `<b>${override}</b>` : `<b style="${it.style || ''}">${it.name}</b>`;
@@ -1198,18 +1294,32 @@ void main() {
       list.addEventListener('pointermove', (e) => { const o = e.target.closest('[role="option"]'); if (o && opts.indexOf(o) !== active) { active = opts.indexOf(o); render(); } });
       document.addEventListener('pointerdown', (e) => { if (!list.hidden && !root.contains(e.target)) close(false); });
       render();
-      return { setDisabled(d, text) { btn.disabled = d; override = d ? text : ''; if (d) close(false); render(); } };
+      return {
+        setDisabled(d, text) { btn.disabled = d; override = d ? text : ''; if (d) close(false); render(); },
+        setItems(next, v) { close(false); fill(next, v); btn.disabled = false; override = ''; render(); }
+      };
     }
-    const fontDD = dropdown(card.querySelector('[data-dd="font"]'), 'Font',
-      FONTS.map((f) => ({ key: f.key, name: f.name, note: f.note, style: `font-family:'${f.css}';font-weight:${f.weight}` })), font.key,
-      (k) => { font = FONTS.find((f) => f.key === k); ready = rebuild(); });
+    const fontItems = FONTS.map((f) => ({ key: f.key, name: f.name, note: f.note, style: `font-family:'${f.css}';font-weight:${f.weight}` }));
+    const scriptItems = SCRIPTS.map((f) => ({ key: f.key, name: f.name, note: f.note, style: `font-family:'${f.css}';font-weight:400` }));
+    const NOTES = {
+      order: 'C writes with a single-line hand drawn for this page; Chinese stroke order comes from Hanzi Writer’s open data (Make Me a Hanzi, Arphic Public License).',
+      script: 'D uses the stroke templates from Vara.js (MIT) for four open-source script fonts (Pacifico, Parisienne and Shadows Into Light under OFL, Satisfy under Apache 2.0). Latin letters only; Chinese borrows real stroke order.'
+    };
+    const kindOf = (m) => (m === 'order' ? 'hand' : m === 'script' ? 'script' : 'font');
+    const fontDD = dropdown(card.querySelector('[data-dd="font"]'), 'Font', fontItems, font.key, (k) => {
+      if (mode.key === 'script') { script = SCRIPTS.find((f) => f.key === k); ready = rebuild(); play(); }
+      else { font = FONTS.find((f) => f.key === k); ready = rebuild(); }
+    });
     dropdown(card.querySelector('[data-dd="mode"]'), 'Write-on', MODES, mode.key, (k) => {
-      const wasHand = mode.key === 'order';
+      const was = kindOf(mode.key);
       mode = MODES.find((m) => m.key === k);
-      const isHand = mode.key === 'order';
-      fontDD.setDisabled(isHand, 'Single-line hand');
-      note.hidden = !isHand;
-      if (wasHand !== isHand) ready = rebuild();
+      const now = kindOf(mode.key);
+      if (now === 'hand') fontDD.setDisabled(true, 'Single-line hand');
+      else if (now === 'script') fontDD.setItems(scriptItems, script.key);
+      else fontDD.setItems(fontItems, font.key);
+      note.textContent = NOTES[mode.key] || '';
+      note.hidden = !NOTES[mode.key];
+      if (was !== now) ready = rebuild();
       play();
     });
     playBtn.addEventListener('click', () => play());
