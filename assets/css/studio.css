@@ -149,6 +149,13 @@
 .pick input::-webkit-color-swatch { border: 0; border-radius: 50%; }
 .pick input::-moz-color-swatch { border: 0; border-radius: 50%; }
 
+/* 05 lens flare looks */
+.flare-tools { padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.flare-looks { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 99px; }
+.flare-looks button { padding: 7px 14px; border-radius: 99px; color: var(--mute); font: 500 14px var(--display); letter-spacing: -.01em; transition: background-color .2s, color .2s; }
+.flare-looks button[aria-checked="true"] { background: var(--ink); color: var(--paper); }
+@media (hover: hover) { .flare-looks button[aria-checked="false"]:hover { color: var(--ink); } }
+
 /* 03 text scramble */
 .scramble {
   container-type: inline-size;

@@ -1592,153 +1592,177 @@ void main() {
     });
   })();
 
-  /* ---------- 05 lens flare: a summer sky, the sun on the cursor ---------- */
+  /* ---------- 05 lens flare: two looks to compare ---------- */
   (function () {
     const stage = document.getElementById('fx-flare'), canvas = stage.querySelector('canvas');
     const kit = glKit(canvas);
     if (!kit) return fail(stage);
-    const { gl, prog, draw } = kit;
-    let P;
-    try {
-      P = prog(VS, `#version 300 es
+    const { gl, prog, draw, canvasTexture, upload } = kit;
+    const HEAD = `#version 300 es
 precision highp float;
 in vec2 vUv; out vec4 o;
 uniform vec2 uRes; uniform vec2 uSun; uniform float uTime;
 ${NOISE}
-float px;
-// far hills, then a nearer ridge with a line of trees
-float farHills(float x) { return -0.05 + 0.045 * sin(x * 2.3 + 0.6) + 0.04 * noise(vec2(x * 2.7, 3.1)); }
-// rounded tree crowns of mixed sizes, so the treeline reads as a soft, uneven canopy
-float crowns(float x, float base, float cw, float seed, float rmin, float rmax) {
-  float c = floor(x / cw), top = base;
-  for (int k = -1; k <= 1; k++) {
-    float ci = c + float(k);
-    if (hash(vec2(ci, seed)) < 0.3) continue;
-    float cx = (ci + 0.5 + (hash(vec2(ci, seed + 1.0)) - 0.5) * 0.7) * cw;
-    float r = mix(rmin, rmax, hash(vec2(ci, seed + 2.0))), u = (x - cx) / r;
-    if (abs(u) < 1.0) top = max(top, base + r * 1.5 * sqrt(1.0 - u * u));
-  }
-  return top;
-}
-float ridge(float x) {
-  float h = -0.2 + 0.06 * sin(x * 1.6 + 2.1) + 0.025 * noise(vec2(x * 6.0, 7.3));
-  return max(crowns(x, h, 0.07, 1.7, 0.022, 0.04), crowns(x + 0.37, h, 0.05, 5.3, 0.014, 0.026));
-}
-// a drifting band of fair-weather cumulus
-float cloud(vec2 p) {
-  vec2 q = vec2(p.x * 1.05 + uTime * 0.012, p.y * 2.5);
-  float n = fbm(q * 2.3 + vec2(0.0, 3.0)) + 0.18 * (noise(q * 11.0) - 0.5);
-  float band = smoothstep(-0.03, 0.1, p.y) * (1.0 - smoothstep(0.36, 0.5, p.y));
-  return smoothstep(0.6, 0.7, n) * band;
-}
-vec3 sky(vec2 p) {
-  float h = clamp(p.y + 0.5, 0.0, 1.0);
-  vec3 c = mix(vec3(0.62, 0.8, 0.96), vec3(0.1, 0.36, 0.86), pow(h, 0.8));
-  float d = length(p - uSun);
-  return c + vec3(1.0, 0.86, 0.62) * (0.16 * exp(-d * 2.2) + 0.4 * exp(-d * 9.0));
-}
-vec3 scene(vec2 p) {
-  vec3 c = sky(p);
-  float d = length(p - uSun);
-  c += vec3(1.0, 0.97, 0.9) * smoothstep(0.024, 0.019, d) * 12.0;
-  float cd = cloud(p);
-  if (cd > 0.001) {
-    float sh = cloud(p + normalize(uSun - p + 1e-5) * 0.025), above = cloud(p + vec2(0.0, 0.03));
-    vec3 cc = mix(vec3(0.58, 0.66, 0.8), vec3(1.0, 0.99, 0.97), 1.0 - 0.55 * sh) * (1.0 - 0.18 * above);
-    cc += vec3(1.0, 0.85, 0.6) * exp(-d * 7.0) * (1.0 - cd) * 1.5;   // silver lining near the sun
-    c = mix(c, cc, cd);
-  }
-  float fh = farHills(p.x);
-  vec3 hills = mix(vec3(0.46, 0.6, 0.73), vec3(0.4, 0.55, 0.62), smoothstep(fh - 0.12, fh, p.y));
-  c = mix(c, mix(hills, sky(p), 0.22), smoothstep(px, -px, p.y - fh));
-  float rg = ridge(p.x);
-  vec3 grass = mix(vec3(0.08, 0.24, 0.11), vec3(0.2, 0.44, 0.17), smoothstep(-0.5, rg, p.y)) * (0.93 + 0.07 * fbm(p * 14.0));
-  grass += vec3(0.25, 0.22, 0.1) * exp(-abs(p.x - uSun.x) * 3.0) * smoothstep(rg - 0.05, rg, p.y) * 0.25;   // rim light along the ridge
-  return mix(c, grass, smoothstep(px, -px, p.y - rg));
-}
-// how much of the sun's disc is in clear sky
-float sunVis() {
-  float v = 0.0;
-  for (int i = 0; i < 5; i++) {
-    float a = float(i) * 1.2566;
-    vec2 q = uSun + (i == 0 ? vec2(0.0) : vec2(cos(a), sin(a)) * 0.016);
-    float t = smoothstep(-0.004, 0.004, q.y - ridge(q.x)) * smoothstep(-0.004, 0.004, q.y - farHills(q.x));
-    v += t * (1.0 - 0.95 * cloud(q));
-  }
-  return v / 5.0;
-}
-float hexd(vec2 q) {
-  q = mat2(0.955, -0.296, 0.296, 0.955) * q;
-  q = abs(q);
-  return max(q.x * 0.866 + q.y * 0.5, q.y);
-}
-vec3 flare(vec2 p, float vis) {
-  vec2 s = uSun, d = p - s;
-  float r = length(d), a = atan(d.y, d.x);
-  vec3 warm = vec3(1.0, 0.9, 0.74);
-  vec3 c = warm * (exp(-r * 22.0) * 1.5 + exp(-r * 6.0) * 0.3 + exp(-r * 1.8) * 0.1);
-  // aperture: six thin spikes and a fine flicker of rays
-  float spikes = pow(abs(cos(a * 3.0 + 0.4)), 420.0) * exp(-r * 8.0) * 1.1;
-  float fine = pow(noise(vec2(cos(a), sin(a)) * 12.0 + uTime * 0.03), 6.0) * exp(-r * 6.5) * 0.7;
-  c += vec3(1.0, 0.97, 0.92) * (spikes + fine);
-  // ghosts: reflections between lens elements, strung along the line through the centre
-  for (int i = 0; i < 7; i++) {
+float sq(float x) { return x * x; }   // pow() is undefined for negative bases in GLSL
+vec3 aces(vec3 c) { return (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14); }
+float grain(vec2 f) { return hash(f + fract(uTime * 7.0) * 113.0) - 0.5; }
+`;
+    let PA, PB;
+    try {
+      /* A · cinematic: the light is the subject, on a dark field */
+      PA = prog(VS, HEAD + `
+uniform sampler2D uWord;
+void main() {
+  vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y, s = uSun, d = p - s;
+  float r = length(d);
+  vec3 col = mix(vec3(0.006, 0.009, 0.022), vec3(0.022, 0.026, 0.05), vUv.y * 0.7 + 0.15);
+  col += vec3(0.012, 0.03, 0.05) * fbm(p * 1.6 + vec2(uTime * 0.02, -uTime * 0.01)) * 1.4;
+  // a wordmark sitting in the dark, picked out only where the light reaches it
+  float w = texture(uWord, vUv).r;
+  col += vec3(0.7, 0.82, 1.0) * w * (0.012 + 0.9 * exp(-r * 3.0));
+  vec3 cool = vec3(0.4, 0.64, 1.0), amber = vec3(1.0, 0.72, 0.42);
+  col += vec3(1.0) * exp(-r * r * 2600.0) * 7.0 + cool * (exp(-r * 13.0) * 0.9 + exp(-r * 3.6) * 0.16);
+  // anamorphic streak: a long horizontal line of light through the source
+  float ay = abs(d.y);
+  float flick = 0.9 + 0.1 * noise(vec2(uTime * 3.0, 1.0));
+  col += cool * flick * (exp(-ay * ay * 12000.0) * exp(-abs(d.x) * 0.8) * 1.3 + exp(-ay * ay * 700.0) * exp(-abs(d.x) * 1.7) * 0.28);
+  // oval ghosts and chromatic rings strung along the line through the centre
+  for (int i = 0; i < 6; i++) {
     float fi = float(i);
-    float k = i == 0 ? 0.55 : i == 1 ? 0.3 : i == 2 ? -0.22 : i == 3 ? -0.42 : i == 4 ? -0.68 : i == 5 ? -1.0 : -1.38;
-    vec2 gp = s * k;
-    float size = 0.016 + 0.05 * hash(vec2(fi, 3.3)) + (i == 5 ? 0.08 : 0.0);
-    vec3 tint = mix(vec3(0.55, 0.85, 1.0), vec3(1.0, 0.78, 0.5), hash(vec2(fi, 7.7)));
-    if (i == 3) tint = vec3(0.6, 1.0, 0.72);
-    vec3 g;
-    for (int ch = 0; ch < 3; ch++) {
-      float hd = hexd((p - gp) / (size * (1.0 + (float(ch) - 1.0) * 0.05)));
-      g[ch] = smoothstep(1.0, 0.92, hd) * (0.3 + 0.7 * smoothstep(0.6, 1.0, hd));
-    }
-    c += g * tint * (0.05 + 0.06 * hash(vec2(fi, 9.1)));
+    float k = i == 0 ? 0.42 : i == 1 ? -0.2 : i == 2 ? -0.45 : i == 3 ? -0.75 : i == 4 ? -1.05 : -1.4;
+    vec2 q = p - s * k; q.x /= 1.9;
+    float size = 0.018 + 0.05 * hash(vec2(fi, 3.1)), dd = length(q) / size;
+    float disc = (1.0 - smoothstep(0.86, 1.0, dd)) * (0.25 + 0.75 * smoothstep(0.45, 1.0, dd));
+    col += mix(cool, amber, step(0.5, hash(vec2(fi, 5.7)))) * disc * (0.06 + 0.06 * hash(vec2(fi, 9.3)));
   }
-  // a faint rainbow halo round the sun
-  float hr = 0.36;
-  c += vec3(exp(-pow((r - hr) * 55.0, 2.0)), exp(-pow((r - hr * 1.03) * 55.0, 2.0)), exp(-pow((r - hr * 1.06) * 55.0, 2.0))) * 0.055;
-  // specks of dust on the front element, lit by the sun
-  float dust = smoothstep(0.58, 0.8, fbm(p * 7.0 + 11.0)) * 0.5 + step(0.988, hash(floor(p * 70.0))) * 0.6;
-  c += warm * dust * exp(-r * 3.2) * 0.22;
-  return c * vis * (0.75 + 0.25 * exp(-length(s) * 2.0));
+  for (int j = 0; j < 2; j++) {
+    vec2 c = s * (j == 0 ? -0.6 : -1.15);
+    float rr = j == 0 ? 0.16 : 0.27, l = length(p - c);
+    col += vec3(exp(-sq((l - rr) * 90.0)), exp(-sq((l - rr * 1.025) * 90.0)), exp(-sq((l - rr * 1.05) * 90.0))) * 0.07;
+  }
+  float dust = smoothstep(0.6, 0.82, fbm(p * 6.0 + 4.0)) * 0.5 + step(0.99, hash(floor(p * 80.0))) * 0.7;
+  col += cool * dust * exp(-r * 2.6) * 0.18;
+  col *= 1.0 - 0.55 * dot(vUv - 0.5, vUv - 0.5);
+  col = aces(max(col, vec3(0.0)) * 1.1) + grain(gl_FragCoord.xy) * 0.035;
+  o = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`);
+      /* B · backlit: shot into the sun through leaves, shallow depth of field */
+      PB = prog(VS, HEAD + `
+// leaves, way out of focus, swaying a little; they frame the frame and leave a clearing of sky
+float foliage(vec2 p) {
+  vec2 q = p + vec2(sin(uTime * 0.6 + p.y * 2.0), cos(uTime * 0.47 + p.x * 1.7)) * 0.014;
+  // many gaps of different sizes, a little denser toward the edges of the frame
+  float n = fbm(q * 3.4 + vec2(3.0, 1.0)) * 0.6 + fbm(q * 7.5 - vec2(2.0, uTime * 0.03)) * 0.4;
+  float edge = smoothstep(0.25, 0.85, length(p * vec2(0.62, 1.0)));
+  return smoothstep(0.4, 0.52, n + edge * 0.16);
+}
+vec3 bokeh(vec2 p, float dens) {
+  vec3 acc = vec3(0.0);
+  for (int L = 0; L < 3; L++) {
+    float fl = float(L), cs = L == 0 ? 0.12 : L == 1 ? 0.08 : 0.055;
+    vec2 g = p / cs + vec2(fl * 3.7, fl * 1.3), id = floor(g);
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+      vec2 cid = id + vec2(float(i), float(j));
+      float h = hash(cid + fl * 7.0);
+      if (h < 0.72) continue;
+      vec2 c = cid + vec2(hash(cid + 1.3), hash(cid + 4.1));
+      float rad = mix(0.22, 0.5, hash(cid + 2.7)), dd = length(g - c) / rad;
+      if (dd > 1.05) continue;
+      vec3 e = dd * vec3(0.975, 1.0, 1.025);
+      vec3 ring = (1.0 - smoothstep(vec3(0.93), vec3(1.0), e)) * (0.55 + 0.45 * smoothstep(vec3(0.6), vec3(1.0), e));
+      float tw = 0.45 + 0.55 * pow(0.5 + 0.5 * sin(uTime * (0.6 + h * 1.4) + h * 40.0), 2.0);
+      vec2 cp = (c - vec2(fl * 3.7, fl * 1.3)) * cs;
+      vec3 tint = h > 0.85 ? vec3(0.86, 1.0, 0.82) : h > 0.68 ? vec3(1.0, 0.82, 0.62) : vec3(1.0, 0.95, 0.82);
+      acc += tint * ring * tw * (0.12 + 0.25 * hash(cid + 8.8)) * (0.08 + 1.6 * exp(-length(cp - uSun) * 2.2));
+    }
+  }
+  return acc * (0.2 + 2.6 * dens * (1.0 - dens));
 }
 void main() {
-  px = 1.5 / uRes.y;
-  vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
-  vec3 col = scene(p);
-  float vis = sunVis();
-  col += flare(p, vis);
-  col += vec3(1.0, 0.95, 0.85) * 0.05 * vis * exp(-length(uSun) * 1.5);   // veiling glare
-  col *= 1.0 - 0.3 * dot(vUv - 0.5, vUv - 0.5);
-  col = (col * (2.51 * col + 0.03)) / (col * (2.43 * col + 0.59) + 0.14);   // filmic
-  col += (hash(gl_FragCoord.xy + fract(uTime) * 41.0) - 0.5) / 255.0;
+  vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y, s = uSun, d = p - s;
+  float r = length(d);
+  // sky blown out round the sun
+  vec3 col = mix(vec3(0.5, 0.68, 0.9), vec3(0.18, 0.42, 0.85), smoothstep(-0.4, 0.6, p.y));
+  col = mix(col, vec3(1.0, 0.97, 0.9), exp(-r * 4.5));
+  col += vec3(1.0, 0.92, 0.75) * exp(-r * 7.0) * 0.9;
+  float dens = foliage(p);
+  float lit = exp(-r * 2.3) * (0.35 + 0.9 * fbm(p * 4.0 + vec2(uTime * 0.05, 0.0)));
+  vec3 leaf = mix(vec3(0.025, 0.05, 0.03), vec3(0.34, 0.5, 0.1), clamp(lit, 0.0, 1.0)) + vec3(0.6, 0.7, 0.2) * lit * (1.0 - abs(dens - 0.5) * 2.0) * 0.6;   // thin leaf edges glow when backlit
+  col = mix(col, leaf, dens);
+  col += bokeh(p, dens);
+  // the sun through the leaves, and the flare it throws
+  float vis = 1.0 - 0.94 * foliage(s);
+  vec3 warm = vec3(1.0, 0.9, 0.74);
+  col += vec3(1.0, 0.98, 0.92) * (1.0 - smoothstep(0.022, 0.03, r)) * 6.0 * vis;
+  col = mix(col, vec3(1.0, 0.95, 0.86), clamp(vis * 0.22 * exp(-r * 2.6), 0.0, 1.0));   // veiling haze washes out the contrast
+  col += warm * vis * (exp(-r * 16.0) * 1.2 + exp(-r * 4.0) * 0.25);
+  float a = atan(d.y, d.x);
+  col += warm * vis * pow(abs(cos(a * 3.0 + 0.5)), 300.0) * exp(-r * 9.0) * 0.7;
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i), k = i == 0 ? -0.3 : i == 1 ? -0.62 : i == 2 ? -0.95 : 0.45;
+    float size = 0.03 + 0.05 * hash(vec2(fi, 6.1)), dd = length(p - s * k) / size;
+    vec3 tint = i == 1 ? vec3(0.7, 1.0, 0.75) : i == 2 ? vec3(0.95, 0.75, 1.0) : vec3(1.0, 0.86, 0.66);
+    col += tint * (1.0 - smoothstep(0.8, 1.0, dd)) * (0.3 + 0.7 * smoothstep(0.5, 1.0, dd)) * 0.06 * vis;
+  }
+  float l = length(d), hr = 0.42;
+  col += vec3(exp(-sq((l - hr) * 40.0)), exp(-sq((l - hr * 1.04) * 40.0)), exp(-sq((l - hr * 1.08) * 40.0))) * 0.05 * vis;
+  // grade: lifted blacks, warm highlights, cool shadows
+  col = col * 0.94 + vec3(0.025, 0.025, 0.02);
+  col = mix(col * vec3(0.92, 0.98, 1.04), col * vec3(1.05, 1.0, 0.9), smoothstep(0.2, 0.8, dot(col, vec3(0.3, 0.6, 0.1))));
+  col *= 1.0 - 0.35 * dot(vUv - 0.5, vUv - 0.5);
+  col = aces(max(col, vec3(0.0))) + grain(gl_FragCoord.xy) * 0.03;
   o = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`);
     } catch (e) { console.warn(e); return fail(stage); }
+
+    // the wordmark for look A
+    const wordTex = canvasTexture(), wc = document.createElement('canvas');
+    function paintWord() {
+      fit(canvas, 1.25);
+      const W = canvas.width, H = canvas.height;
+      wc.width = W; wc.height = H;
+      const c = wc.getContext('2d');
+      c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+      c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.font = `600 ${Math.round(H * 0.42)}px "Instrument Sans", sans-serif`;
+      try { c.letterSpacing = `${-Math.round(H * 0.025)}px`; } catch (e) {}
+      c.fillText('reon.', W / 2, H * 0.53);
+      upload(wordTex, wc);
+    }
+    paintWord();
+
+    const LOOKS = { cinema: { hint: 'Move the light across the word' }, backlit: { hint: 'Move the sun · it flickers through the leaves' } };
+    let look = 'backlit';
+    const hint = stage.querySelector('.hint');
+    const seg = stage.closest('.fx').querySelector('.flare-looks');
+    const setLook = (k) => {
+      look = k;
+      hint.textContent = LOOKS[k].hint;
+      seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.k === k)));
+    };
+    seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setLook(b.dataset.k); });
+    setLook(look);
+
     const ptr = trackPointer(stage);
-    const sun = { x: 0.25, y: 0.18 };
+    const sun = { x: 0.2, y: 0.12 };
     let idle = 0;
     register(stage, {
-      resize() { fit(canvas, 1.25); },
+      resize() { if (fit(canvas, 1.25).changed) paintWord(); },
+      redraw: paintWord,
       tick(dt, t) {
         const asp = canvas.width / canvas.height;
         let tx, ty;
         if (performance.now() - ptr.lastMove < 2000) { tx = (ptr.x - 0.5) * asp; ty = 0.5 - ptr.y; }
-        else {
-          // drift across the sky, through the clouds and now and then behind the hills
-          idle += dt;
-          tx = Math.sin(idle * 0.23) * 0.42 * asp;
-          ty = 0.06 + 0.2 * Math.sin(idle * 0.31 + 1.2);
-        }
+        else { idle += dt; tx = Math.sin(idle * 0.23) * 0.4 * asp; ty = 0.05 + 0.18 * Math.sin(idle * 0.31 + 1.2); }
         const k = 1 - Math.exp(-dt * 8);
         sun.x += (tx - sun.x) * k; sun.y += (ty - sun.y) * k;
+        const P = look === 'cinema' ? PA : PB;
         gl.useProgram(P.p);
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.uniform2f(P.u.uRes, canvas.width, canvas.height);
         gl.uniform2f(P.u.uSun, sun.x, sun.y);
         gl.uniform1f(P.u.uTime, t);
+        if (P.u.uWord) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wordTex); gl.uniform1i(P.u.uWord, 0); }
         draw();
       }
     });
