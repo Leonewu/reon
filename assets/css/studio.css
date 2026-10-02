@@ -127,6 +127,28 @@
 @media (hover: hover) { .play-btn:hover { background: var(--accent); color: #fff; } }
 .glass-note { max-width: 60em; line-height: 1.5; }
 
+/* 02 light push palette */
+.beam-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatches button {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(160deg, var(--top), var(--bot));
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08);
+  transition: transform .2s var(--ease), box-shadow .2s;
+}
+.swatches button::after { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--beam); box-shadow: 0 0 8px 2px var(--beam); }
+.swatches button[aria-checked="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
+@media (hover: hover) { .swatches button:hover { transform: scale(1.08); } }
+.pickers { display: flex; gap: 14px; }
+.pick { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.pick input { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: none; cursor: pointer; }
+.pick input::-webkit-color-swatch-wrapper { padding: 0; }
+.pick input::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.pick input::-moz-color-swatch { border: 0; border-radius: 50%; }
+
 /* 03 text scramble */
 .scramble {
   container-type: inline-size;

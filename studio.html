@@ -55,10 +55,18 @@
       </article>
       <article class="fx" data-reveal>
         <div class="stage" id="fx-beams"><canvas></canvas><span class="hint">Swipe across the light</span></div>
+        <div class="beam-tools">
+          <div class="swatches" role="radiogroup" aria-label="Palette"></div>
+          <div class="pickers">
+            <label class="pick"><input type="color" data-k="top" aria-label="Sky colour"><span class="label">Sky</span></label>
+            <label class="pick"><input type="color" data-k="bot" aria-label="Horizon colour"><span class="label">Horizon</span></label>
+            <label class="pick"><input type="color" data-k="beam" aria-label="Light colour"><span class="label">Light</span></label>
+          </div>
+        </div>
         <div class="fx-meta">
           <span class="label">02</span>
           <h2>Light push<span class="label">fluid</span></h2>
-          <p>A hidden fluid simulation bends slanted beams of light instead of drawing smoke: swipe and the rays smear, fringe into red, green and blue, and leave a glow that slowly settles.</p>
+          <p>A hidden fluid simulation bends slanted beams of light instead of drawing smoke: swipe and the rays smear, fringe into red, green and blue, and leave a glow that slowly settles. Pick a palette, or mix your own sky, horizon and light.</p>
           <p>Technique: Jos Stam’s Stable Fluids (1999), used here only to displace the image.</p>
         </div>
       </article>
@@ -86,11 +94,11 @@
         </div>
       </article>
       <article class="fx" data-reveal>
-        <div class="stage" id="fx-flare"><canvas></canvas><span class="hint">Move the light · hide it behind the towers</span></div>
+        <div class="stage" id="fx-flare"><canvas></canvas><span class="hint">Move the sun · hide it behind a cloud or the hills</span></div>
         <div class="fx-meta">
           <span class="label">05</span>
           <h2>Lens flare<span class="label">shader</span></h2>
-          <p>The light follows the cursor: a hot core, star rays, a horizontal streak, hexagonal ghosts and a chromatic halo. Hide it behind the towers and it dims.</p>
+          <p>A summer sky with the sun on your cursor. The lens answers with a warm glare, six thin aperture spikes, a chain of tinted ghosts through the centre, a faint rainbow halo and specks of dust on the glass. Slide the sun behind a cloud or the treeline and the whole flare fades.</p>
           <p>It imitates what real lenses do when they are pointed at something bright.</p>
         </div>
       </article>
