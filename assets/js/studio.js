@@ -741,53 +741,184 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
         const len = polyLen(pts);
         const endA = cluster[b.px[0]], endB = cluster[b.px[b.px.length - 1]];
         const freeA = cn[b.px[0]] <= 1, freeB = cn[b.px[b.px.length - 1]] <= 1;
-        if (!b.dot && !b.closed && (freeA !== freeB) && len < spur * 1.3) continue;
+        if (!b.dot && !b.closed && (freeA !== freeB) && len < spur * 2.4) continue;   // thinning leaves short whiskers at round corners
         strokes.push({ pts, len, ends: [endA, endB], free: [freeA, freeB], closed: !!b.closed, dot: !!b.dot });
       }
-      // letters = branches joined through junctions
-      const parent = strokes.map((_, i) => i);
-      const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-      const byCluster = new Map();
-      strokes.forEach((s, i) => s.ends.forEach((c) => { if (c < 0) return; if (byCluster.has(c)) parent[find(i)] = find(byCluster.get(c)); else byCluster.set(c, i); }));
-      const comps = new Map();
-      strokes.forEach((s, i) => { const r = find(i); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(s); });
-      const lineOf = (y) => { let li = 0, bd = Infinity; g.lines.forEach((l, j) => { const d = Math.abs(l.cy - y); if (d < bd) { bd = d; li = j; } }); return li; };
-      const groups = [...comps.values()].map((list) => {
-        let x0 = Infinity, y0 = Infinity, y1 = -Infinity;
-        for (const s of list) for (const [x, y] of s.pts) { const xu = x + g.slant * (y - DH / 2); if (xu < x0) x0 = xu; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-        return { list, x0, y0, line: lineOf((y0 + y1) / 2) };
-      }).sort((a, b) => a.line - b.line || a.x0 - b.x0);
-      const ordered = [];
-      for (const grp of groups) {
-        let pen = [grp.x0 - g.slant * (grp.y0 - DH / 2), grp.y0], dir = null, at = -1;
-        const rem = grp.list.slice();
-        while (rem.length) {
-          let best = null;
-          for (const s of rem) {
-            const cands = s.closed ? [topStart(s.pts)] : s.dot ? [0] : [0, s.pts.length - 1];
-            for (const k of cands) {
-              const p = s.pts[k], end = s.closed ? -1 : (k === 0 ? 0 : 1);
-              let cost = Math.hypot(p[0] - pen[0], p[1] - pen[1]);
-              if (end >= 0 && at >= 0 && s.ends[end] === at) {
-                const q = s.pts[k === 0 ? Math.min(6, s.pts.length - 1) : Math.max(0, s.pts.length - 7)];
-                const d = norm([q[0] - p[0], q[1] - p[1]]);
-                cost = dir ? (1 - (d[0] * dir[0] + d[1] * dir[1])) * 40 : 0;
-              } else if (end >= 0 && !s.free[end]) cost += 30;
-              if (!best || cost < best.cost) best = { s, k, cost };
-            }
+      return orderLikeAHand(g, strokes, nc);
+    }
+
+    // Turn skeleton branches into strokes the way a hand writes them:
+    //  · letters are written one after another, left to right, line by line;
+    //  · branches are cut at sharp corners, so E becomes a stem and three arms;
+    //  · each stroke runs top-to-bottom / left-to-right; closed loops start at the top, anticlockwise;
+    //  · inside a letter, the leftmost stroke goes first (higher first on ties), dots go last;
+    //  · the pen carries straight on through junctions, and always through corners (L, V, Z, N).
+    function orderLikeAHand(g, strokes, nextNode) {
+      const xu = (x, y) => x + g.slant * (y - DH / 2);
+      const pieces = [];
+      const endInfo = (s, k) => (s.free[k] ? { node: -1, kind: 'free' } : s.ends[k] >= 0 ? { node: s.ends[k], kind: 'junction' } : { node: -1, kind: 'dead' });
+      for (const s of strokes) {
+        if (s.dot) { pieces.push({ pts: s.pts, a: { node: -1, kind: 'free' }, b: { node: -1, kind: 'free' }, dot: true }); continue; }
+        const span = Math.max(6, g.hw * 0.7);
+        let pts = s.pts, cuts = corners(pts, span);
+        if (s.closed) {
+          if (!cuts.length) { pieces.push({ pts, a: { node: -1, kind: 'free' }, b: { node: -1, kind: 'free' }, closed: true }); continue; }
+          const ring = pts.slice(0, -1), k0 = cuts[0];
+          pts = ring.slice(k0).concat(ring.slice(0, k0));
+          pts.push(pts[0].slice());
+          cuts = cuts.map((c) => (c - k0 + ring.length) % ring.length).filter((c) => c > 0).sort((x, y) => x - y);
+          const ids = [nextNode++, ...cuts.map(() => nextNode++)];
+          const bounds = [0, ...cuts, pts.length - 1];
+          for (let i = 0; i < bounds.length - 1; i++) {
+            pieces.push({ pts: pts.slice(bounds[i], bounds[i + 1] + 1), a: { node: ids[i], kind: 'corner' }, b: { node: i + 1 < ids.length ? ids[i + 1] : ids[0], kind: 'corner' } });
           }
-          rem.splice(rem.indexOf(best.s), 1);
-          let pts = best.s.pts;
-          if (best.s.closed) pts = loopFrom(pts, best.k);
-          else if (best.k !== 0) pts = pts.slice().reverse();
-          ordered.push(pts);
-          const e = pts[pts.length - 1], f = pts[Math.max(0, pts.length - 7)];
-          dir = norm([e[0] - f[0], e[1] - f[1]]);
-          pen = e;
-          at = best.s.closed || best.s.dot ? -1 : best.s.ends[best.k === 0 ? 1 : 0];
+          continue;
+        }
+        const bounds = [0, ...cuts, pts.length - 1];
+        let prevEnd = endInfo(s, 0);
+        for (let i = 0; i < bounds.length - 1; i++) {
+          const last = i === bounds.length - 2;
+          const end = last ? endInfo(s, 1) : { node: nextNode++, kind: 'corner' };
+          pieces.push({ pts: pts.slice(bounds[i], bounds[i + 1] + 1), a: prevEnd, b: end });
+          prevEnd = end;
+        }
+      }
+      // Thinning can leave the pieces that meet at one spot a pixel or two apart (a walk that
+      // stopped next to its junction, a corner cut beside one). Ends that close are one node.
+      {
+        const ends = [];
+        for (const p of pieces) if (!p.dot && !p.closed) { ends.push({ e: p.a, pt: p.pts[0] }, { e: p.b, pt: p.pts[p.pts.length - 1] }); }
+        const up = ends.map((_, i) => i), root = (i) => (up[i] === i ? i : (up[i] = root(up[i])));
+        const near = Math.max(4, g.hw * 0.6), nearTip = Math.max(4, g.hw * 0.45);
+        for (let i = 0; i < ends.length; i++) {
+          for (let j = i + 1; j < ends.length; j++) {
+            const fi = ends[i].e.kind === 'free', fj = ends[j].e.kind === 'free';
+            if (fi && fj) continue;
+            const same = ends[i].e.node >= 0 && ends[i].e.node === ends[j].e.node;
+            // a real tip only joins a node right next to it (the point of a V)
+            if (same || Math.hypot(ends[i].pt[0] - ends[j].pt[0], ends[i].pt[1] - ends[j].pt[1]) < (fi || fj ? nearTip : near)) up[root(i)] = root(j);
+          }
+        }
+        const groups = new Map();
+        ends.forEach((x, i) => { const r = root(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(x); });
+        for (const list of groups.values()) {
+          if (list.length < 2) {
+            const e = list[0].e;
+            if (e.kind === 'free') continue;
+            // a junction end that found no partner: it probably meets a stroke that walks
+            // straight past it (a T). Cut that stroke there and share the node.
+            let best = null;
+            for (const q of pieces) {
+              if (q.dot || q.closed || q.a === e || q.b === e) continue;
+              for (let k = 2; k < q.pts.length - 2; k++) {
+                const d = Math.hypot(q.pts[k][0] - list[0].pt[0], q.pts[k][1] - list[0].pt[1]);
+                if (d < near && (!best || d < best.d)) best = { q, k, d };
+              }
+            }
+            if (best) {
+              const id = nextNode++, { q, k } = best;
+              e.node = id; e.kind = 'junction';
+              const tail = { pts: q.pts.slice(k), a: { node: id, kind: 'junction' }, b: q.b };
+              q.pts = q.pts.slice(0, k + 1); q.b = { node: id, kind: 'junction' };
+              pieces.push(tail);
+            } else if (e.kind === 'dead') { e.kind = 'free'; e.node = -1; }
+            continue;
+          }
+          const id = nextNode++, kind = list.some((x) => x.e.kind === 'junction' || x.e.kind === 'free') ? 'junction' : 'corner';
+          for (const x of list) { x.e.node = id; x.e.kind = kind; }
+        }
+      }
+      // crumbs left between junction pixels are not strokes
+      for (let i = pieces.length - 1; i >= 0; i--) if (!pieces[i].dot && !pieces[i].closed && polyLen(pieces[i].pts) < Math.max(4, g.hw * 0.5)) pieces.splice(i, 1);
+      // which letter each piece belongs to
+      const lineOf = (y) => { let li = 0, bd = Infinity; g.lines.forEach((l, j) => { const d = Math.abs(l.cy - y); if (d < bd) { bd = d; li = j; } }); return li; };
+      const before = [];
+      let acc = 0;
+      g.lines.forEach((l) => { before.push(acc); acc += l.chars ? l.chars.length : 0; });
+      for (const p of pieces) {
+        let sx = 0, sy = 0;
+        for (const [x, y] of p.pts) { sx += x; sy += y; }
+        p.cx = sx / p.pts.length; p.cy = sy / p.pts.length;
+        const li = lineOf(p.cy), ln = g.lines[li], X = xu(p.cx, p.cy);
+        let j = 0;
+        if (ln && ln.edges) while (j + 1 < ln.edges.length && ln.edges[j + 1] <= X) j++;
+        p.letter = (before[li] || 0) + j;
+        // natural direction: start at the end that is further up-left
+        if (p.closed) p.pts = loopFrom(p.pts, topStart(p.pts));
+        else if (!p.dot) {
+          const s0 = p.pts[0], s1 = p.pts[p.pts.length - 1];
+          if (xu(s1[0], s1[1]) + s1[1] < xu(s0[0], s0[1]) + s0[1] - 1) flip(p);
+        }
+      }
+      const degree = new Map();
+      for (const p of pieces) for (const e of [p.a, p.b]) if (e.node >= 0) degree.set(e.node, (degree.get(e.node) || 0) + 1);
+      const letters = new Map();
+      for (const p of pieces) { if (!letters.has(p.letter)) letters.set(p.letter, []); letters.get(p.letter).push(p); }
+      const ordered = [];
+      for (const idx of [...letters.keys()].sort((a, b) => a - b)) {
+        const rem = letters.get(idx);
+        let x0 = Infinity, y0 = Infinity, y1 = -Infinity;
+        for (const p of rem) for (const [x, y] of p.pts) { x0 = Math.min(x0, xu(x, y)); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+        const h = Math.max(1, y1 - y0);
+        // leftmost first, higher first; a stroke is rarely started from the middle of a junction
+        const key = (p) => (p.dot ? 100 : 0) + (xu(p.cx, p.cy) - x0) / h + 0.8 * (p.pts[0][1] - y0) / h + (p.a.kind === 'junction' ? 0.25 : 0);
+        let at = null, dir = null;
+        while (rem.length) {
+          let pick = null;
+          if (at && (at.kind === 'corner' || degree.get(at.node) === 2)) {
+            pick = rem.find((p) => p.a.node === at.node || p.b.node === at.node);
+            if (pick && pick.a.node !== at.node) flip(pick);
+          } else if (at && at.kind === 'junction' && dir) {
+            // carry straight on (turning less than ~50°): into a stroke that starts here, or
+            // backwards into one whose far end is a free tail (the hook of g, the tail of y)
+            let best = 0.64, flipIt = false;
+            for (const p of rem) {
+              let d = null, rev = false;
+              if (p.a.node === at.node) d = headDir(p.pts, Math.max(6, g.hw * 0.7));
+              else if (p.b.node === at.node && p.a.kind === 'free') { d = headDir(p.pts.slice().reverse(), Math.max(6, g.hw * 0.7)); rev = true; }
+              if (!d) continue;
+              const cos = d[0] * dir[0] + d[1] * dir[1];
+              if (cos > best) { best = cos; pick = p; flipIt = rev; }
+            }
+            if (pick && flipIt) flip(pick);
+          }
+          if (!pick) pick = rem.reduce((m, p) => (key(p) < key(m) ? p : m), rem[0]);
+          rem.splice(rem.indexOf(pick), 1);
+          ordered.push(pick.pts);
+          at = pick.closed || pick.dot ? null : pick.b;
+          dir = pick.dot ? null : tailDir(pick.pts, Math.max(6, g.hw * 0.7));
         }
       }
       return ordered;
+    }
+    const flip = (p) => { p.pts = p.pts.slice().reverse(); const t = p.a; p.a = p.b; p.b = t; };
+    // direction of travel over the first / last `span` px of a polyline
+    function headDir(pts, span) { let k = 1, L = 0; while (k < pts.length - 1 && L < span) { L += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]); k++; } return norm([pts[Math.min(k, pts.length - 1)][0] - pts[0][0], pts[Math.min(k, pts.length - 1)][1] - pts[0][1]]); }
+    function tailDir(pts, span) { const r = pts.slice().reverse(), d = headDir(r, span); return [-d[0], -d[1]]; }
+    // indices where a polyline turns sharply (more than ~55°), measured over `span` px
+    function corners(pts, span) {
+      const n = pts.length, cum = [0];
+      for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+      const total = cum[n - 1], ang = new Float32Array(n);
+      let lo = 0, hi = 0;
+      for (let i = 0; i < n; i++) {
+        if (cum[i] < span || total - cum[i] < span) continue;
+        while (cum[lo] < cum[i] - span) lo++;
+        while (hi < n - 1 && cum[hi] < cum[i] + span) hi++;
+        const a = norm([pts[i][0] - pts[lo][0], pts[i][1] - pts[lo][1]]), b = norm([pts[hi][0] - pts[i][0], pts[hi][1] - pts[i][1]]);
+        ang[i] = Math.acos(clamp(a[0] * b[0] + a[1] * b[1], -1, 1));
+      }
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        if (ang[i] < 0.96) continue;
+        let j = i;
+        while (j + 1 < n && ang[j + 1] >= 0.96) j++;
+        let m = i;
+        for (let k = i; k <= j; k++) if (ang[k] > ang[m]) m = k;
+        out.push(m);
+        i = j;
+      }
+      return out;
     }
     const polyLen = (pts) => { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return L; };
     const norm = (v) => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; };
@@ -808,23 +939,36 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
       if (!L && !strokes.length) return null;
       const v = Math.max(1, L) / clamp(L / 950, 1.1, 7.5);    // px per second
       const seed = new Uint8Array(N), val = new Float32Array(N).fill(1e6), track = [];
-      let t = 0.12, last = null;
-      const mark = (x, y, time) => {
-        const xi = Math.round(x), yi = Math.round(y);
-        if (xi < 0 || yi < 0 || xi >= DW || yi >= DH) return;
-        const i = yi * DW + xi;
-        if (!seed[i] || val[i] > time) { seed[i] = 1; val[i] = time; }
+      const hwAt = (x, y) => { const xi = clamp(Math.round(x), 0, DW - 1), yi = clamp(Math.round(y), 0, DH - 1); return g.inside[yi * DW + xi] + g.growPx; };
+      // a spot counts as written the first time the pen's footprint passes over it, so junctions
+      // fill in with the first stroke that reaches them instead of waiting for a later one
+      const stamp = (x, y, time) => {
+        const r = Math.max(hwAt(x, y), 1.5) + 1.5, r2 = r * r;
+        const xa = Math.max(0, Math.floor(x - r)), xb = Math.min(DW - 1, Math.ceil(x + r));
+        const ya = Math.max(0, Math.floor(y - r)), yb = Math.min(DH - 1, Math.ceil(y + r));
+        for (let yy = ya; yy <= yb; yy++) {
+          const dy = yy - y, row = yy * DW;
+          for (let xx = xa; xx <= xb; xx++) {
+            const dx = xx - x;
+            if (dx * dx + dy * dy > r2) continue;
+            const i = row + xx;
+            if (!seed[i] || val[i] > time) { seed[i] = 1; val[i] = time; }
+          }
+        }
+        return r;
       };
+      let t = 0.12, last = null;
       for (const s of strokes) {
         if (last) { const gap = Math.hypot(s[0][0] - last[0], s[0][1] - last[1]); if (gap > 6) t += 0.08 + gap / (v * 3); }
         const pts = [], t0 = t;
-        for (let k = 0; k < s.length; k++) {
-          if (k) {
-            const [ax, ay] = s[k - 1], [bx, by] = s[k], d = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(d));
-            for (let j = 1; j <= n; j++) mark(ax + (bx - ax) * j / n, ay + (by - ay) * j / n, t + d * j / n / v);
-            t += d / v;
-          } else mark(s[0][0], s[0][1], t);
-          pts.push([s[k][0], s[k][1], t]);
+        let r = stamp(s[0][0], s[0][1], t);
+        pts.push([s[0][0], s[0][1], t]);
+        for (let k = 1; k < s.length; k++) {
+          const [ax, ay] = s[k - 1], [bx, by] = s[k], d = Math.hypot(bx - ax, by - ay);
+          const n = Math.max(1, Math.ceil(d / Math.max(1, r * 0.3)));
+          for (let j = 1; j <= n; j++) r = stamp(ax + (bx - ax) * j / n, ay + (by - ay) * j / n, t + d * j / n / v);
+          t += d / v;
+          pts.push([bx, by, t]);
         }
         if (s.length === 1) t += 0.06;
         track.push({ t0, t1: t, pts });
@@ -832,7 +976,6 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
       }
       const total = t + 0.15;
       const time = spread(seed, val);
-      const hwAt = (x, y) => { const xi = clamp(Math.round(x), 0, DW - 1), yi = clamp(Math.round(y), 0, DH - 1); return g.inside[yi * DW + xi] + g.growPx; };
       // where the pen tip is at time `now` (null while it is lifted)
       const tipAt = (now) => {
         let lo = 0, hi = track.length - 1;
