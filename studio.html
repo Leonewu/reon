@@ -39,13 +39,18 @@
         <div class="stage" id="fx-glass"><canvas></canvas><span class="hint">Move to tilt the word and stir the light</span></div>
         <div class="glass-tools">
           <label class="glass-input"><span class="label">Text</span><input type="text" value="reon" spellcheck="false" autocomplete="off" aria-label="Text to render as glass"></label>
-          <div class="font-chips" role="radiogroup" aria-label="Font"></div>
+          <div class="glass-row">
+            <div class="dd" data-dd="font"></div>
+            <div class="dd" data-dd="mode"></div>
+            <button class="play-btn" type="button"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 2.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L4.4 1.7a.6.6 0 0 0-.9.5Z" fill="currentColor"/></svg>Play</button>
+          </div>
+          <p class="glass-note label" hidden>C writes with a single-line hand drawn for this page; Chinese stroke order comes from Hanzi Writer’s open data (Make Me a Hanzi, Arphic Public License).</p>
         </div>
         <div class="fx-meta">
           <span class="label">01</span>
           <h2>Glass type<span class="label">shader · sdf</span></h2>
           <p>Type anything and pick a font. The letters are turned into a distance field and wrapped into glass in a shader: thin fonts grow into round tubes, heavy ones puff up like balloons. Light bends through them, splits into colour and catches star-shaped glints.</p>
-          <p>All ten fonts are open source (OFL). Long text wraps onto more lines; Chinese falls back to Noto Sans SC.</p>
+          <p>Press Play to write it on. A inflates the letters one by one. B works out strokes from the letter shapes (thinning them to a skeleton, then ordering the pieces like a hand would), so it works with any font. C writes with real stroke order: a single-line hand drawn for this page, and real stroke order for Chinese.</p>
         </div>
       </article>
       <article class="fx" data-reveal>

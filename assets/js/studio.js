@@ -265,7 +265,7 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
     };
   }
 
-  /* ---------- 01 glass type: a tube generated from a handwritten centre line ---------- */
+  /* ---------- 01 glass type, with three write-on animations ---------- */
   (function () {
     const stage = document.getElementById('fx-glass'), canvas = stage.querySelector('canvas');
     const kit = glKit(canvas);
@@ -273,11 +273,11 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
     const { gl, prog } = kit;
     if (!gl.getExtension('EXT_color_buffer_float')) return fail(stage, 'This effect needs floating-point rendering');
 
-    // the typed text is drawn into a 1024 x 448 box; every texel stores its distance to the
-    // nearest stroke, and the shader wraps a round tube of radius R around that
-    const DW = 1024, DH = 600, BOX_W = 2.4;
-    const CJK = /[\u2e80-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af\uff00-\uffef]/;
-    let R = 0.085, GROW = 0.085;
+    // Text is laid out into a DW x DH field. Every texel keeps its signed distance to the
+    // letters and the shader wraps glass around that. For the write-on animations a second
+    // field keeps, per texel, the moment the pen (or the letter) reaches it.
+    const DW = 1024, DH = 600, N = DW * DH, BOX_W = 2.4, BOX_H = BOX_W * DH / DW, PX = BOX_W / DW;
+    const CJK = /[⺀-鿿豈-﫿぀-ヿ가-힯＀-￯]/;
     // all free (OFL) fonts from Google Fonts; weight picked so each reads well as glass
     const FONTS = [
       { key: 'fredoka', name: 'Fredoka', note: 'round', css: 'Fredoka', weight: 600, slant: 0.06 },
@@ -291,8 +291,19 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
       { key: 'comfortaa', name: 'Comfortaa', note: 'thin round', css: 'Comfortaa', weight: 500, slant: 0.1 },
       { key: 'quicksand', name: 'Quicksand', note: 'light', css: 'Quicksand', weight: 300, slant: 0.14 }
     ];
-    let font = FONTS[0];
-    function edt1d(f, n, d, v, z) {
+    const MODES = [
+      { key: 'pop', name: 'A · Letter by letter', note: 'letters inflate in turn' },
+      { key: 'trace', name: 'B · Traced strokes', note: 'strokes worked out from the font' },
+      { key: 'order', name: 'C · Stroke order', note: 'single-line hand, real Chinese order' }
+    ];
+    let font = FONTS[0], mode = MODES[1];
+    let R = 0.085, GROW = 0.085, geo = null, anim = null;
+
+    /* ---- distance transforms (Felzenszwalb & Huttenlocher), with the nearest source ---- */
+    const M = Math.max(DW, DH);
+    const S = { f: new Float64Array(M), d: new Float64Array(M), v: new Int32Array(M), z: new Float64Array(M + 1), a: new Int32Array(M) };
+    function edt1d(n) {
+      const { f, d, v, z, a } = S;
       let k = 0; v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
       for (let q = 1; q < n; q++) {
         let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
@@ -300,31 +311,39 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
         k++; v[k] = q; z[k] = s; z[k + 1] = Infinity;
       }
       k = 0;
-      for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; }
+      for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; a[q] = v[k]; }
     }
-    const fontFor = (cjk) => cjk && !/Cherry/.test(font.css) ? `${Math.min(font.weight, 500)} 100px "Noto Sans SC", sans-serif` : `${font.weight} 100px "${font.css}", "Noto Sans SC", sans-serif`;
-    function edt(f) {
-      const n = Math.max(DW, DH), g = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
-      for (let col = 0; col < DW; col++) {
-        for (let y = 0; y < DH; y++) g[y] = f[y * DW + col];
-        edt1d(g, DH, d, v, z);
-        for (let y = 0; y < DH; y++) f[y * DW + col] = d[y];
+    // distance (px) from every texel to the nearest seed; optionally which seed that is
+    function transform(seed, wantSource) {
+      const dist = new Float64Array(N), colSrc = wantSource ? new Int32Array(N) : null, src = wantSource ? new Int32Array(N) : null;
+      for (let x = 0; x < DW; x++) {
+        for (let y = 0; y < DH; y++) S.f[y] = seed[y * DW + x] ? 0 : 1e20;
+        edt1d(DH);
+        for (let y = 0; y < DH; y++) { dist[y * DW + x] = S.d[y]; if (colSrc) colSrc[y * DW + x] = S.a[y]; }
       }
-      for (let y = 0; y < DH; y++) {
-        for (let col = 0; col < DW; col++) g[col] = f[y * DW + col];
-        edt1d(g, DW, d, v, z);
-        for (let col = 0; col < DW; col++) f[y * DW + col] = Math.sqrt(d[col]);
+      for (let y = 0, row = 0; y < DH; y++, row += DW) {
+        for (let x = 0; x < DW; x++) S.f[x] = dist[row + x];
+        edt1d(DW);
+        for (let x = 0; x < DW; x++) {
+          dist[row + x] = Math.sqrt(S.d[x]);
+          if (src) { const sx = S.a[x]; src[row + x] = colSrc[row + sx] * DW + sx; }
+        }
       }
-      return f;
+      return { dist, src };
     }
-    // signed distance (px) to the glyph outline: negative inside the letters
-    function distanceField(text) {
-      const c = document.createElement('canvas'); c.width = DW; c.height = DH;
-      const x = c.getContext('2d', { willReadFrequently: true });
-      const f = new Float32Array(DW * DH).fill(4000);
-      if (!text) return { field: f, r: 0.05, grow: 0 };
-      const cjk = CJK.test(text), slant = cjk ? 0 : font.slant;
-      x.font = fontFor(cjk);
+    // spread per-seed values to every texel (each texel takes its nearest seed's value)
+    function spread(seed, value) {
+      let any = false;
+      for (let i = 0; i < N; i++) if (seed[i]) { any = true; break; }
+      const out = new Float32Array(N);
+      if (!any) return out.fill(1e6);
+      const { src } = transform(seed, true);
+      for (let i = 0; i < N; i++) out[i] = value[src[i]];
+      return out;
+    }
+
+    /* ---- layout ---- */
+    function tokens(text) {
       // words (and single CJK characters) are the units that can move to the next line
       const toks = [];
       for (const part of text.split(/(\s+)/)) {
@@ -334,66 +353,511 @@ void main() { vec2 g = 0.5 * vec2(texture(uP, vR).x - texture(uP, vL).x, texture
         for (const ch of part) { if (CJK.test(ch)) { if (buf) toks.push(buf); buf = ''; toks.push(ch); } else buf += ch; }
         if (buf) toks.push(buf);
       }
+      return toks;
+    }
+    // try 1, 2, 3… lines and keep whichever lets the letters be biggest (sizes at 100px)
+    function fitLines(text, advance, ink, lh, slant) {
+      const toks = tokens(text);
       const wrap = (maxW) => {
         const lines = [];
         let cur = '';
         for (const t of toks) {
           const next = cur + t;
-          if (cur.trim() && t !== ' ' && x.measureText(next.trimEnd()).width > maxW) { lines.push(cur.trimEnd()); cur = t; }
+          if (cur.trim() && t !== ' ' && advance(next.trimEnd()) > maxW) { lines.push(cur.trim()); cur = t; }
           else cur = next;
         }
         if (cur.trim()) lines.push(cur.trim());
-        return lines.length ? lines.map((l) => l.trim()) : [''];
+        return lines.length ? lines : [''];
       };
-      const probe = x.measureText('Hgjy国');
-      const lh = (probe.actualBoundingBoxAscent + probe.actualBoundingBoxDescent) * 1.06 + 12;   // at 100px, incl. the tube
-      const fullW = x.measureText(text).width;
-      // try 1, 2, 3… lines and keep whichever lets the letters be biggest
+      const fullW = advance(text);
       let best = null;
-      for (let L = 1; L <= 24; L++) {
+      for (let L = 1; L <= 30; L++) {
         let lo = 0, hi = fullW;
         for (let k = 0; k < 16; k++) { const mid = (lo + hi) / 2; if (wrap(mid).length <= L) hi = mid; else lo = mid; }
         const lines = wrap(hi);
-        const wMax = Math.max(...lines.map((l) => { const m = x.measureText(l); return m.actualBoundingBoxLeft + m.actualBoundingBoxRight; }));
-        const fsL = Math.min(420, DW * 0.84 / (wMax / 100 + slant * lh / 100), DH * 0.84 / (lines.length * lh / 100));
-        if (!best || fsL > best.fs * 1.02) best = { lines, fs: fsL };
-        if (lines.length < L) break;   // nothing left to wrap
+        const wMax = Math.max(1, ...lines.map(ink));
+        const fs = Math.min(420, DW * 0.84 / (wMax / 100 + slant * lh / 100), DH * 0.84 / (lines.length * lh / 100));
+        if (!best || fs > best.fs * 1.02) best = { lines, fs };
+        if (lines.length < L) break;
       }
+      return best;
+    }
+
+    const cv = document.createElement('canvas'); cv.width = DW; cv.height = DH;
+    const cx = cv.getContext('2d', { willReadFrequently: true });
+    function readMask() {
+      const a = cx.getImageData(0, 0, DW, DH).data, m = new Uint8Array(N);
+      for (let i = 0; i < N; i++) m[i] = a[i * 4 + 3] > 127 ? 1 : 0;
+      return m;
+    }
+    const emptyGeo = (kind) => ({ kind, mask: new Uint8Array(N), fs: 100, cjk: false, slant: 0, lines: [], T: 5.8, strokes: [] });
+
+    /* ---- letters from a font ---- */
+    const fontFor = (cjk, px = 100) => (cjk && !/Cherry/.test(font.css)
+      ? `${Math.min(font.weight, 500)} ${px}px "Noto Sans SC", sans-serif`
+      : `${font.weight} ${px}px "${font.css}", "Noto Sans SC", sans-serif`);
+    function layoutFont(text) {
+      if (!text) return emptyGeo('font');
+      const cjk = CJK.test(text), slant = cjk ? 0 : font.slant;
+      cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, DW, DH);
+      cx.font = fontFor(cjk);
+      const probe = cx.measureText('Hgjy国');
+      const lh = (probe.actualBoundingBoxAscent + probe.actualBoundingBoxDescent) * 1.06 + 12;   // incl. room for the tube
+      const ink = (l) => { const m = cx.measureText(l); return m.actualBoundingBoxLeft + m.actualBoundingBoxRight; };
+      const best = fitLines(text, (s) => cx.measureText(s).width, ink, lh, slant);
       const fs = Math.max(10, best.fs);
-      x.font = fontFor(cjk).replace('100px', `${fs.toFixed(1)}px`);
-      x.setTransform(1, 0, -slant, 1, slant * DH / 2, 0);
-      x.fillStyle = '#fff';
-      const step = lh * fs / 100;
+      cx.font = fontFor(cjk, fs.toFixed(1));
+      cx.setTransform(1, 0, -slant, 1, slant * DH / 2, 0);
+      cx.fillStyle = '#fff';
+      const step = lh * fs / 100, lines = [];
       best.lines.forEach((line, i) => {
-        const m = x.measureText(line);
+        const m = cx.measureText(line), w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
         const cy = DH / 2 + (i - (best.lines.length - 1) / 2) * step;
-        const w = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
-        x.fillText(line, (DW - w) / 2 + m.actualBoundingBoxLeft, cy + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+        const x0 = (DW - w) / 2 + m.actualBoundingBoxLeft;
+        cx.fillText(line, x0, cy + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+        const chars = Array.from(line), edges = [];
+        let acc = '';
+        for (const ch of chars) { edges.push(x0 + cx.measureText(acc).width); acc += ch; }
+        lines.push({ cy, chars, edges });
       });
-      const a = x.getImageData(0, 0, DW, DH).data;
-      const outside = new Float32Array(DW * DH), inside = new Float32Array(DW * DH);
-      for (let i = 0; i < f.length; i++) { const on = a[i * 4 + 3] > 127; outside[i] = on ? 0 : 1e20; inside[i] = on ? 1e20 : 0; }
-      edt(outside); edt(inside);
+      return { kind: 'font', mask: readMask(), fs, cjk, slant, lines, T: (cjk ? 0.03 : 0.058) * fs, strokes: null };
+    }
+
+    /* ---- letters from pen paths: a single-line hand drawn for this page ----
+       Units: 1000 per em, y down, baseline 0, x-height -480, caps -700, descenders +230.
+       Each entry is [advance, strokes]; strokes are listed in writing order and direction. */
+    const HAND = {
+      a: [460, ['M 380 -380 C 350 -450 300 -480 230 -480 C 120 -480 50 -380 50 -240 C 50 -100 120 0 220 0 C 310 0 370 -80 380 -170', 'M 390 -480 L 390 0']],
+      b: [460, ['M 70 -720 L 70 0', 'M 72 -250 C 85 -400 160 -480 250 -480 C 350 -480 410 -380 410 -240 C 410 -100 350 0 250 0 C 160 0 85 -80 72 -200']],
+      c: [420, ['M 370 -390 C 340 -450 290 -480 230 -480 C 120 -480 50 -380 50 -240 C 50 -100 120 0 230 0 C 290 0 340 -30 370 -90']],
+      d: [460, ['M 375 -380 C 345 -450 295 -480 225 -480 C 115 -480 50 -380 50 -240 C 50 -100 115 0 215 0 C 305 0 365 -80 375 -170', 'M 390 -720 L 390 0']],
+      e: [430, ['M 60 -250 L 380 -250 C 380 -390 310 -480 220 -480 C 110 -480 50 -380 50 -240 C 50 -100 120 0 230 0 C 300 0 350 -30 380 -90']],
+      f: [300, ['M 270 -690 C 245 -712 215 -720 185 -720 C 125 -720 100 -675 100 -600 L 100 0', 'M 30 -470 L 250 -470']],
+      g: [460, ['M 380 -380 C 350 -450 300 -480 230 -480 C 120 -480 50 -390 50 -260 C 50 -130 120 -40 220 -40 C 310 -40 370 -110 380 -200', 'M 390 -480 L 390 60 C 390 170 320 230 220 230 C 150 230 100 200 70 150']],
+      h: [450, ['M 70 -720 L 70 0', 'M 72 -300 C 90 -420 160 -480 240 -480 C 340 -480 380 -410 380 -310 L 380 0']],
+      i: [160, ['M 80 -480 L 80 0', 'M 80 -645 L 80 -635']],
+      j: [210, ['M 140 -480 L 140 90 C 140 180 100 230 30 230', 'M 140 -645 L 140 -635']],
+      k: [410, ['M 70 -720 L 70 0', 'M 360 -480 L 75 -200', 'M 175 -295 L 380 0']],
+      l: [180, ['M 80 -720 L 80 -90 C 80 -30 105 0 150 0']],
+      m: [660, ['M 70 -480 L 70 0', 'M 72 -330 C 90 -430 150 -480 220 -480 C 300 -480 330 -420 330 -330 L 330 0', 'M 332 -330 C 350 -430 410 -480 480 -480 C 560 -480 590 -420 590 -330 L 590 0']],
+      n: [450, ['M 70 -480 L 70 0', 'M 72 -300 C 90 -420 160 -480 240 -480 C 340 -480 380 -410 380 -310 L 380 0']],
+      o: [460, ['M 230 -480 C 120 -480 50 -380 50 -240 C 50 -100 120 0 230 0 C 340 0 410 -100 410 -240 C 410 -380 340 -480 230 -480 Z']],
+      p: [460, ['M 70 -480 L 70 230', 'M 72 -250 C 85 -400 160 -480 250 -480 C 350 -480 410 -380 410 -240 C 410 -100 350 0 250 0 C 160 0 85 -80 72 -200']],
+      q: [460, ['M 375 -380 C 345 -450 295 -480 225 -480 C 115 -480 50 -380 50 -240 C 50 -100 115 0 215 0 C 305 0 365 -80 375 -170', 'M 390 -480 L 390 230']],
+      r: [310, ['M 70 -480 L 70 0', 'M 72 -300 C 90 -420 160 -480 270 -470']],
+      s: [380, ['M 330 -420 C 300 -460 250 -480 190 -480 C 110 -480 60 -440 60 -370 C 60 -300 120 -270 190 -250 C 270 -230 330 -190 330 -120 C 330 -40 270 0 190 0 C 120 0 70 -30 40 -80']],
+      t: [300, ['M 120 -640 L 120 -90 C 120 -30 150 0 200 0 C 230 0 250 -10 270 -20', 'M 30 -470 L 260 -470']],
+      u: [450, ['M 70 -480 L 70 -170 C 70 -60 120 0 210 0 C 300 0 360 -60 378 -180', 'M 380 -480 L 380 0']],
+      v: [420, ['M 40 -480 L 210 0 L 380 -480']],
+      w: [620, ['M 40 -480 L 170 0 L 310 -380 L 450 0 L 580 -480']],
+      x: [400, ['M 50 -480 L 350 0', 'M 350 -480 L 50 0']],
+      y: [420, ['M 40 -480 L 210 -20', 'M 380 -480 L 180 70 C 150 160 110 220 40 220']],
+      z: [400, ['M 60 -480 L 350 -480 L 50 0 L 350 0']],
+      A: [560, ['M 40 0 L 280 -700 L 520 0', 'M 120 -230 L 440 -230']],
+      B: [500, ['M 80 -700 L 80 0', 'M 80 -700 L 260 -700 C 360 -700 410 -650 410 -540 C 410 -430 350 -380 250 -380 L 80 -380', 'M 250 -380 C 380 -380 440 -310 440 -190 C 440 -70 370 0 260 0 L 80 0']],
+      C: [560, ['M 500 -580 C 450 -660 380 -710 290 -710 C 140 -710 50 -560 50 -350 C 50 -140 140 10 290 10 C 380 10 450 -40 500 -120']],
+      D: [560, ['M 80 -700 L 80 0', 'M 80 -700 L 230 -700 C 410 -700 500 -560 500 -350 C 500 -140 410 0 230 0 L 80 0']],
+      E: [460, ['M 400 -700 L 80 -700 L 80 0 L 400 0', 'M 80 -360 L 340 -360']],
+      F: [440, ['M 400 -700 L 80 -700 L 80 0', 'M 80 -360 L 340 -360']],
+      G: [580, ['M 500 -580 C 450 -660 380 -710 290 -710 C 140 -710 50 -560 50 -350 C 50 -140 140 10 290 10 C 420 10 510 -80 520 -260 L 330 -260']],
+      H: [560, ['M 80 -700 L 80 0', 'M 480 -700 L 480 0', 'M 80 -360 L 480 -360']],
+      I: [180, ['M 90 -700 L 90 0']],
+      J: [380, ['M 300 -700 L 300 -190 C 300 -60 240 10 160 10 C 90 10 50 -30 30 -100']],
+      K: [500, ['M 80 -700 L 80 0', 'M 440 -700 L 90 -290', 'M 210 -440 L 470 0']],
+      L: [420, ['M 80 -700 L 80 0 L 390 0']],
+      M: [680, ['M 70 0 L 110 -700 L 340 -180 L 570 -700 L 610 0']],
+      N: [580, ['M 80 0 L 80 -700 L 500 0 L 500 -700']],
+      O: [620, ['M 310 -710 C 150 -710 50 -560 50 -350 C 50 -140 150 10 310 10 C 470 10 570 -140 570 -350 C 570 -560 470 -710 310 -710 Z']],
+      P: [480, ['M 80 -700 L 80 0', 'M 80 -700 L 260 -700 C 370 -700 430 -630 430 -520 C 430 -410 370 -340 260 -340 L 80 -340']],
+      Q: [620, ['M 310 -710 C 150 -710 50 -560 50 -350 C 50 -140 150 10 310 10 C 470 10 570 -140 570 -350 C 570 -560 470 -710 310 -710 Z', 'M 360 -150 L 560 40']],
+      R: [500, ['M 80 -700 L 80 0', 'M 80 -700 L 260 -700 C 370 -700 430 -630 430 -520 C 430 -410 370 -340 260 -340 L 80 -340', 'M 250 -340 L 460 0']],
+      S: [480, ['M 420 -600 C 380 -670 320 -710 240 -710 C 140 -710 70 -650 70 -550 C 70 -450 150 -410 250 -380 C 360 -350 430 -290 430 -190 C 430 -60 350 10 240 10 C 150 10 80 -30 40 -110']],
+      T: [500, ['M 30 -700 L 470 -700', 'M 250 -700 L 250 0']],
+      U: [560, ['M 80 -700 L 80 -250 C 80 -80 160 10 280 10 C 400 10 480 -80 480 -250 L 480 -700']],
+      V: [540, ['M 30 -700 L 270 0 L 510 -700']],
+      W: [780, ['M 30 -700 L 200 0 L 390 -560 L 580 0 L 750 -700']],
+      X: [520, ['M 50 -700 L 470 0', 'M 470 -700 L 50 0']],
+      Y: [520, ['M 40 -700 L 260 -360 L 480 -700', 'M 260 -360 L 260 0']],
+      Z: [500, ['M 60 -700 L 440 -700 L 50 0 L 450 0']],
+      0: [460, ['M 230 -710 C 110 -710 50 -560 50 -350 C 50 -140 110 10 230 10 C 350 10 410 -140 410 -350 C 410 -560 350 -710 230 -710 Z']],
+      1: [380, ['M 110 -560 L 260 -700 L 260 0']],
+      2: [460, ['M 70 -560 C 100 -650 160 -710 240 -710 C 340 -710 400 -640 400 -550 C 400 -450 340 -380 60 0 L 410 0']],
+      3: [460, ['M 70 -620 C 110 -680 170 -710 240 -710 C 340 -710 400 -650 400 -560 C 400 -460 330 -400 220 -400 C 340 -400 420 -330 420 -210 C 420 -80 340 10 230 10 C 150 10 90 -30 50 -100']],
+      4: [480, ['M 300 -700 L 40 -220 L 440 -220', 'M 340 -480 L 340 0']],
+      5: [460, ['M 400 -700 L 110 -700 L 80 -390 C 130 -430 190 -450 250 -450 C 360 -450 420 -360 420 -230 C 420 -90 340 10 230 10 C 150 10 90 -30 50 -100']],
+      6: [470, ['M 360 -690 C 330 -705 300 -710 270 -710 C 140 -710 60 -560 60 -330 C 60 -110 130 10 240 10 C 350 10 420 -80 420 -210 C 420 -340 350 -420 250 -420 C 160 -420 90 -360 60 -280']],
+      7: [450, ['M 50 -700 L 420 -700 L 180 0']],
+      8: [460, ['M 230 -390 C 130 -390 80 -450 80 -550 C 80 -650 140 -710 230 -710 C 320 -710 380 -650 380 -550 C 380 -450 330 -390 230 -390 C 120 -390 50 -320 50 -200 C 50 -70 130 10 230 10 C 330 10 410 -70 410 -200 C 410 -320 340 -390 230 -390 Z']],
+      9: [460, ['M 400 -420 C 370 -340 310 -290 220 -290 C 120 -290 50 -370 50 -500 C 50 -630 130 -710 230 -710 C 340 -710 400 -620 400 -480 L 400 -250 C 400 -80 330 10 220 10 C 160 10 110 -10 80 -50']],
+      '.': [150, ['M 70 -15 L 70 -5']],
+      ',': [150, ['M 75 -20 L 45 90']],
+      '!': [160, ['M 75 -700 L 75 -200', 'M 75 -15 L 75 -5']],
+      '?': [430, ['M 60 -580 C 90 -670 150 -710 220 -710 C 320 -710 380 -650 380 -560 C 380 -470 320 -420 240 -380 C 210 -360 200 -330 200 -220', 'M 200 -15 L 200 -5']],
+      "'": [140, ['M 70 -720 L 60 -560']],
+      '’': [140, ['M 70 -720 L 60 -560']],
+      '"': [230, ['M 70 -720 L 60 -560', 'M 160 -720 L 150 -560']],
+      '-': [330, ['M 50 -260 L 280 -260']],
+      ':': [150, ['M 70 -415 L 70 -405', 'M 70 -15 L 70 -5']],
+      ';': [160, ['M 75 -415 L 75 -405', 'M 80 -20 L 50 90']],
+      '/': [340, ['M 300 -740 L 40 160']],
+      '(': [240, ['M 200 -740 C 110 -620 70 -480 70 -260 C 70 -40 110 100 200 220']],
+      ')': [240, ['M 40 -740 C 130 -620 170 -480 170 -260 C 170 -40 130 100 40 220']],
+      '+': [420, ['M 60 -260 L 360 -260', 'M 210 -410 L 210 -110']],
+      '&': [500, ['M 450 0 L 160 -400 C 110 -470 100 -520 100 -570 C 100 -660 160 -710 230 -710 C 300 -710 350 -660 350 -590 C 350 -510 290 -460 180 -400 C 100 -350 50 -290 50 -200 C 50 -70 140 10 250 10 C 340 10 400 -40 450 -150']]
+    };
+    const handCache = new Map();
+    let svgPath = null;
+    function handGlyph(ch) {
+      if (handCache.has(ch)) return handCache.get(ch);
+      const g = HAND[ch];
+      if (!g) return null;
+      if (!svgPath) {
+        const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+        svgPath = document.createElementNS(NS, 'path');
+        svg.appendChild(svgPath); document.body.appendChild(svg);
+      }
+      const strokes = g[1].map((d) => {
+        svgPath.setAttribute('d', d);
+        const L = svgPath.getTotalLength(), n = Math.max(2, Math.ceil(L / 6)), pts = [];
+        for (let i = 0; i <= n; i++) { const p = svgPath.getPointAtLength(L * i / n); pts.push([p.x, p.y]); }
+        return pts;
+      });
+      const out = { adv: g[0], strokes };
+      handCache.set(ch, out);
+      return out;
+    }
+    // Chinese stroke order: Hanzi Writer's open data (from Make Me a Hanzi, Arphic Public License).
+    // Each character has a centre line ("median") per stroke, in writing order.
+    const hanziCache = new Map();
+    function hanziGlyph(ch) {
+      if (!hanziCache.has(ch)) {
+        hanziCache.set(ch, fetch(`https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0/${encodeURIComponent(ch)}.json`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => d && d.medians ? { adv: 950, strokes: d.medians.map(smoothMedian) } : null)
+          .catch(() => null));
+      }
+      return hanziCache.get(ch);
+    }
+    function smoothMedian(m) {
+      // 1024 box with y up → our units; Catmull-Rom through the few given points
+      const P = m.map(([x, y]) => [x * 0.928, 230 - (y + 124) * 0.928]), out = [];
+      for (let i = 0; i < P.length - 1; i++) {
+        const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+        const seg = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 6));
+        for (let s = 0; s < seg; s++) {
+          const t = s / seg, t2 = t * t, t3 = t2 * t;
+          out.push([0, 1].map((k) => 0.5 * (2 * p1[k] + (p2[k] - p0[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (3 * p1[k] - p0[k] - 3 * p2[k] + p3[k]) * t3)));
+        }
+      }
+      out.push(P[P.length - 1]);
+      return out;
+    }
+    async function layoutHand(text) {
+      if (!text) return emptyGeo('hand');
+      const glyphs = new Map();
+      await Promise.all([...new Set(Array.from(text))].map(async (ch) => glyphs.set(ch, CJK.test(ch) ? await hanziGlyph(ch) : handGlyph(ch))));
+      const adv = (ch) => (ch === ' ' ? 260 : glyphs.get(ch) ? glyphs.get(ch).adv : 300);
+      const advance = (s) => Array.from(s).reduce((w, ch) => w + adv(ch), 0) * 0.1;
+      const cjk = CJK.test(text), slant = cjk ? 0 : 0.1, lh = 115;
+      const best = fitLines(text, advance, advance, lh, slant);
+      const fs = Math.max(10, best.fs), s = fs / 1000, step = lh * fs / 100;
+      const strokes = [], lines = [];
+      best.lines.forEach((line, i) => {
+        const cy = DH / 2 + (i - (best.lines.length - 1) / 2) * step, base = cy + 245 * s;
+        let pen = (DW - advance(line) * fs / 100) / 2;
+        for (const ch of Array.from(line)) {
+          const g = glyphs.get(ch);
+          if (g) for (const st of g.strokes) strokes.push(st.map(([gx, gy]) => { const X = pen + gx * s, Y = base + gy * s; return [X - slant * (Y - DH / 2), Y]; }));
+          pen += adv(ch) * s;
+        }
+        lines.push({ cy });
+      });
+      // the letters are the pen paths drawn thin; the shader grows them into tubes
+      cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, DW, DH);
+      cx.strokeStyle = '#fff'; cx.lineWidth = 3; cx.lineCap = 'round'; cx.lineJoin = 'round';
+      for (const st of strokes) {
+        cx.beginPath();
+        st.forEach(([x, y], k) => (k ? cx.lineTo(x, y) : cx.moveTo(x, y)));
+        cx.stroke();
+      }
+      return { kind: 'hand', mask: readMask(), fs, cjk, slant, lines, T: (cjk ? 0.03 : 0.05) * fs, strokes };
+    }
+
+    /* ---- signed distance field + how puffy the glass should be ---- */
+    function buildField(g) {
+      const inn = new Uint8Array(N);
+      for (let i = 0; i < N; i++) inn[i] = g.mask[i] ? 0 : 1;
+      const out = transform(g.mask, false).dist, ins = transform(inn, false).dist;
+      const field = new Float32Array(N);
       let sum = 0, cnt = 0;
-      for (let i = 0; i < f.length; i++) {
-        f[i] = Math.max(-4000, Math.min(4000, outside[i] - inside[i]));
-        if (inside[i] > 0) { sum += inside[i]; cnt++; }
+      for (let i = 0; i < N; i++) {
+        field[i] = Math.max(-4000, Math.min(4000, out[i] - ins[i]));
+        if (g.mask[i]) { sum += ins[i]; cnt++; }
       }
       // stroke half-width ≈ twice the mean depth inside the letters. Thin strokes are grown
       // into round tubes; thick ones keep their outline and are puffed up like a balloon.
-      const hw = cnt ? 2 * sum / cnt : 0, T = (cjk ? 0.03 : 0.058) * fs;
-      const r = hw < T ? T : Math.min(hw, T * 2.1), grow = hw < T ? T - hw : 0;
-      return { field: f, r: r * BOX_W / DW, grow: grow * BOX_W / DW };
+      const hw = cnt ? 2 * sum / cnt : 0, T = g.T;
+      g.rPx = hw < T ? T : Math.min(hw, T * 2.1);
+      g.growPx = hw < T ? T - hw : 0;
+      g.hw = hw; g.field = field; g.inside = ins;
+      return g;
     }
 
+    /* ---- A: letters inflate one after another ---- */
+    function letterTimes(g) {
+      const order = [];
+      let k = 0;
+      g.lines.forEach((ln) => ln.chars.forEach((ch) => order.push(/\s/.test(ch) ? -1 : k++)));
+      const n = Math.max(1, k), stagger = clamp(1.8 / n, 0.045, 0.13), dur = 0.62;
+      const starts = [];
+      let base = 0;
+      g.lines.forEach((ln) => { starts.push(base); base += ln.chars.length; });
+      const seed = new Uint8Array(N), val = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        if (!g.mask[i]) continue;
+        const y = (i / DW) | 0, x = i - y * DW;
+        let li = 0, bd = Infinity;
+        for (let j = 0; j < g.lines.length; j++) { const d = Math.abs(g.lines[j].cy - y); if (d < bd) { bd = d; li = j; } }
+        const ln = g.lines[li], xu = x + g.slant * (y - DH / 2);
+        let j = 0;
+        while (j + 1 < ln.edges.length && ln.edges[j + 1] <= xu) j++;
+        let idx = order[starts[li] + j];
+        for (let back = j; idx < 0 && back > 0; back--) idx = order[starts[li] + back - 1];
+        seed[i] = 1; val[i] = Math.max(0, idx) * stagger;
+      }
+      return { kind: 'pop', time: spread(seed, val), total: (n - 1) * stagger + dur + 0.1, dur, hwW: (g.hw * 1.6 + g.growPx) * PX + 0.004 };
+    }
 
+    /* ---- B: strokes worked out from the letter shapes ----
+       Thin the letters to a one-pixel skeleton, cut it into branches at junctions, then order
+       the branches the way a hand would: letter by letter, starting top-left at a free end,
+       carrying straight on through junctions. */
+    const OFF8 = (W) => [-W, -W + 1, 1, W + 1, W, W - 1, -1, -W - 1];
+    function thin(img, W, H) {
+      const O = OFF8(W);
+      let fg = [];
+      for (let i = 0; i < W * H; i++) if (img[i]) fg.push(i);
+      for (let changed = true; changed;) {
+        changed = false;
+        for (let pass = 0; pass < 2; pass++) {
+          const del = [];
+          for (const i of fg) {
+            if (!img[i]) continue;
+            const p = O.map((o) => img[i + o]);
+            const B = p.reduce((a, b) => a + b, 0);
+            if (B < 2 || B > 6) continue;
+            let A = 0;
+            for (let k = 0; k < 8; k++) if (!p[k] && p[(k + 1) % 8]) A++;
+            if (A !== 1) continue;
+            if (pass === 0 ? (p[0] && p[2] && p[4]) || (p[2] && p[4] && p[6]) : (p[0] && p[2] && p[6]) || (p[0] && p[4] && p[6])) continue;
+            del.push(i);
+          }
+          for (const i of del) img[i] = 0;
+          if (del.length) changed = true;
+        }
+        fg = fg.filter((i) => img[i]);
+      }
+      return fg;
+    }
+    function traceStrokes(g) {
+      const W = DW >> 1, H = DH >> 1, img = new Uint8Array(W * H), O = OFF8(W);
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+        const i = 2 * y * DW + 2 * x;
+        img[y * W + x] = g.mask[i] + g.mask[i + 1] + g.mask[i + DW] + g.mask[i + DW + 1] >= 2 ? 1 : 0;
+      }
+      const sk = thin(img, W, H);
+      const nb = (i) => O.map((o) => i + o).filter((j) => img[j]);
+      const cn = new Int8Array(W * H);
+      for (const i of sk) { let A = 0; for (let k = 0; k < 8; k++) if (!img[i + O[k]] && img[i + O[(k + 1) % 8]]) A++; cn[i] = A; }
+      const isNode = (i) => cn[i] !== 2;
+      // junction pixels that touch form one junction
+      const cluster = new Int32Array(W * H).fill(-1);
+      let nc = 0;
+      for (const i of sk) {
+        if (!isNode(i) || cluster[i] >= 0) continue;
+        const q = [i]; cluster[i] = nc;
+        while (q.length) { const c = q.pop(); for (const j of nb(c)) if (cn[j] >= 3 && cn[c] >= 3 && cluster[j] < 0) { cluster[j] = nc; q.push(j); } }
+        nc++;
+      }
+      const visited = new Uint8Array(W * H), seen = new Set(), branches = [];
+      const xy = (i) => [i % W, (i / W) | 0];
+      const far = (a, b) => { const [ax, ay] = xy(a), [bx, by] = xy(b); return (ax - bx) ** 2 + (ay - by) ** 2; };
+      for (const n of sk) {
+        if (!isNode(n)) continue;
+        if (!nb(n).length) { branches.push({ px: [n], dot: true }); continue; }
+        for (const m of nb(n)) {
+          if (isNode(m)) {
+            if (cluster[m] === cluster[n]) continue;
+            const key = Math.min(n, m) + ':' + Math.max(n, m);
+            if (!seen.has(key)) { seen.add(key); branches.push({ px: [n, m] }); }
+            continue;
+          }
+          if (visited[m]) continue;
+          const px = [n];
+          let prev = n, cur = m;
+          for (;;) {
+            px.push(cur);
+            if (isNode(cur)) break;
+            visited[cur] = 1;
+            let next = -1, bd = -1;
+            for (const j of nb(cur)) {
+              if (j === prev || (visited[j] && !isNode(j)) || (isNode(j) && j === n && px.length < 4)) continue;
+              const d = far(j, prev);
+              if (d > bd) { bd = d; next = j; }
+            }
+            if (next < 0) break;
+            prev = cur; cur = next;
+          }
+          if (px.length >= 4 || isNode(px[px.length - 1])) branches.push({ px });
+        }
+      }
+      // closed loops with no junction (o, 0, D…): start at the top
+      for (const i of sk) {
+        if (visited[i] || isNode(i)) continue;
+        const px = [i];
+        visited[i] = 1;
+        let prev = -1, cur = i;
+        for (;;) {
+          let next = -1, bd = -1;
+          for (const j of nb(cur)) { if (visited[j]) continue; const d = prev < 0 ? 1 : far(j, prev); if (d > bd) { bd = d; next = j; } }
+          if (next < 0) break;
+          visited[next] = 1; px.push(next); prev = cur; cur = next;
+        }
+        if (px.length > 6) branches.push({ px, closed: true });
+      }
+      // to full resolution, lightly smoothed; drop short spurs left by thinning
+      const spur = Math.max(4, g.hw * 0.9);
+      const strokes = [];
+      for (const b of branches) {
+        const raw = b.px.map((i) => { const [x, y] = xy(i); return [x * 2 + 1, y * 2 + 1]; });
+        const pts = raw.map((p, k) => {
+          if (k === 0 || k === raw.length - 1) return p;
+          const a = raw[Math.max(0, k - 2)], c = raw[Math.min(raw.length - 1, k + 2)];
+          return [(a[0] + p[0] * 2 + c[0]) / 4, (a[1] + p[1] * 2 + c[1]) / 4];
+        });
+        if (b.closed) pts.push(pts[0].slice());
+        const len = polyLen(pts);
+        const endA = cluster[b.px[0]], endB = cluster[b.px[b.px.length - 1]];
+        const freeA = cn[b.px[0]] <= 1, freeB = cn[b.px[b.px.length - 1]] <= 1;
+        if (!b.dot && !b.closed && (freeA !== freeB) && len < spur * 1.3) continue;
+        strokes.push({ pts, len, ends: [endA, endB], free: [freeA, freeB], closed: !!b.closed, dot: !!b.dot });
+      }
+      // letters = branches joined through junctions
+      const parent = strokes.map((_, i) => i);
+      const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+      const byCluster = new Map();
+      strokes.forEach((s, i) => s.ends.forEach((c) => { if (c < 0) return; if (byCluster.has(c)) parent[find(i)] = find(byCluster.get(c)); else byCluster.set(c, i); }));
+      const comps = new Map();
+      strokes.forEach((s, i) => { const r = find(i); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(s); });
+      const lineOf = (y) => { let li = 0, bd = Infinity; g.lines.forEach((l, j) => { const d = Math.abs(l.cy - y); if (d < bd) { bd = d; li = j; } }); return li; };
+      const groups = [...comps.values()].map((list) => {
+        let x0 = Infinity, y0 = Infinity, y1 = -Infinity;
+        for (const s of list) for (const [x, y] of s.pts) { const xu = x + g.slant * (y - DH / 2); if (xu < x0) x0 = xu; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        return { list, x0, y0, line: lineOf((y0 + y1) / 2) };
+      }).sort((a, b) => a.line - b.line || a.x0 - b.x0);
+      const ordered = [];
+      for (const grp of groups) {
+        let pen = [grp.x0 - g.slant * (grp.y0 - DH / 2), grp.y0], dir = null, at = -1;
+        const rem = grp.list.slice();
+        while (rem.length) {
+          let best = null;
+          for (const s of rem) {
+            const cands = s.closed ? [topStart(s.pts)] : s.dot ? [0] : [0, s.pts.length - 1];
+            for (const k of cands) {
+              const p = s.pts[k], end = s.closed ? -1 : (k === 0 ? 0 : 1);
+              let cost = Math.hypot(p[0] - pen[0], p[1] - pen[1]);
+              if (end >= 0 && at >= 0 && s.ends[end] === at) {
+                const q = s.pts[k === 0 ? Math.min(6, s.pts.length - 1) : Math.max(0, s.pts.length - 7)];
+                const d = norm([q[0] - p[0], q[1] - p[1]]);
+                cost = dir ? (1 - (d[0] * dir[0] + d[1] * dir[1])) * 40 : 0;
+              } else if (end >= 0 && !s.free[end]) cost += 30;
+              if (!best || cost < best.cost) best = { s, k, cost };
+            }
+          }
+          rem.splice(rem.indexOf(best.s), 1);
+          let pts = best.s.pts;
+          if (best.s.closed) pts = loopFrom(pts, best.k);
+          else if (best.k !== 0) pts = pts.slice().reverse();
+          ordered.push(pts);
+          const e = pts[pts.length - 1], f = pts[Math.max(0, pts.length - 7)];
+          dir = norm([e[0] - f[0], e[1] - f[1]]);
+          pen = e;
+          at = best.s.closed || best.s.dot ? -1 : best.s.ends[best.k === 0 ? 1 : 0];
+        }
+      }
+      return ordered;
+    }
+    const polyLen = (pts) => { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return L; };
+    const norm = (v) => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; };
+    const topStart = (pts) => { let k = 0; for (let i = 1; i < pts.length - 1; i++) if (pts[i][1] < pts[k][1]) k = i; return k; };
+    // start a closed loop at index k and run it anticlockwise on screen (top, then left)
+    function loopFrom(pts, k) {
+      const ring = pts.slice(0, -1), n = ring.length;
+      let out = ring.slice(k).concat(ring.slice(0, k));
+      if (out[Math.min(4, n - 1)][0] > out[0][0]) out = [out[0]].concat(out.slice(1).reverse());
+      out.push(out[0].slice());
+      return out;
+    }
+
+    /* ---- B and C: walk the pen along the strokes ---- */
+    function penTimes(g, strokes) {
+      strokes = strokes.filter((s) => s.length);
+      const L = strokes.reduce((a, s) => a + polyLen(s), 0);
+      if (!L && !strokes.length) return null;
+      const v = Math.max(1, L) / clamp(L / 950, 1.1, 7.5);    // px per second
+      const seed = new Uint8Array(N), val = new Float32Array(N).fill(1e6), track = [];
+      let t = 0.12, last = null;
+      const mark = (x, y, time) => {
+        const xi = Math.round(x), yi = Math.round(y);
+        if (xi < 0 || yi < 0 || xi >= DW || yi >= DH) return;
+        const i = yi * DW + xi;
+        if (!seed[i] || val[i] > time) { seed[i] = 1; val[i] = time; }
+      };
+      for (const s of strokes) {
+        if (last) { const gap = Math.hypot(s[0][0] - last[0], s[0][1] - last[1]); if (gap > 6) t += 0.08 + gap / (v * 3); }
+        const pts = [], t0 = t;
+        for (let k = 0; k < s.length; k++) {
+          if (k) {
+            const [ax, ay] = s[k - 1], [bx, by] = s[k], d = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(d));
+            for (let j = 1; j <= n; j++) mark(ax + (bx - ax) * j / n, ay + (by - ay) * j / n, t + d * j / n / v);
+            t += d / v;
+          } else mark(s[0][0], s[0][1], t);
+          pts.push([s[k][0], s[k][1], t]);
+        }
+        if (s.length === 1) t += 0.06;
+        track.push({ t0, t1: t, pts });
+        last = s[s.length - 1];
+      }
+      const total = t + 0.15;
+      const time = spread(seed, val);
+      const hwAt = (x, y) => { const xi = clamp(Math.round(x), 0, DW - 1), yi = clamp(Math.round(y), 0, DH - 1); return g.inside[yi * DW + xi] + g.growPx; };
+      // where the pen tip is at time `now` (null while it is lifted)
+      const tipAt = (now) => {
+        let lo = 0, hi = track.length - 1;
+        while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (track[mid].t0 <= now) lo = mid; else hi = mid - 1; }
+        const tr = track[lo];
+        if (!tr || now < tr.t0 || now > tr.t1 + 0.02) return null;
+        const P = tr.pts;
+        let a = 0, b = P.length - 1;
+        while (a < b - 1) { const m = (a + b) >> 1; if (P[m][2] <= now) a = m; else b = m; }
+        const u = P[b][2] > P[a][2] ? clamp((now - P[a][2]) / (P[b][2] - P[a][2]), 0, 1) : 1;
+        const x = P[a][0] + (P[b][0] - P[a][0]) * u, y = P[a][1] + (P[b][1] - P[a][1]) * u;
+        return [-BOX_W / 2 + x / DW * BOX_W, -BOX_H / 2 + (1 - y / DH) * BOX_H, Math.max(hwAt(x, y), g.rPx * 0.6) * PX, 1];
+      };
+      return { kind: 'pen', time, total, tipAt };
+    }
+
+    /* ---- GPU ---- */
     const SCENE = `#version 300 es
 precision highp float;
 in vec2 vUv; out vec4 o;
 uniform vec2 uRes; uniform float uTime;
-uniform sampler2D uVel; uniform sampler2D uDist;
+uniform sampler2D uVel; uniform sampler2D uDist; uniform sampler2D uWhen;
 uniform vec4 uBox; uniform float uPx; uniform float uR; uniform float uGrow;
 uniform mat3 uRot; uniform vec3 uLight;
+uniform int uMode; uniform float uProg; uniform float uDur; uniform float uHw; uniform vec4 uTip;
 ${NOISE}
 ${BEAMS}
 vec3 pushed(vec2 uv) {
@@ -406,28 +870,58 @@ float d2(vec2 xy) {
   vec2 t = (xy - uBox.xy) / uBox.zw, c = clamp(t, 0.0, 1.0);
   return texture(uDist, vec2(c.x, 1.0 - c.y)).r * uPx + length((t - c) * uBox.zw);
 }
-float map(vec3 p) { p = uRot * p; return length(vec2(max(d2(p.xy) - uGrow + uR, 0.0), p.z)) - uR; }
-vec3 nrm(vec3 p) {
+// when the pen (or the letter's turn) reaches this spot, in seconds
+float when(vec2 xy) {
+  vec2 t = clamp((xy - uBox.xy) / uBox.zw, 0.0, 1.0);
+  return texture(uWhen, vec2(t.x, 1.0 - t.y)).r;
+}
+float backOut(float x) { float c1 = 1.70158, c3 = c1 + 1.0; return 1.0 + c3 * pow(x - 1.0, 3.0) + c1 * pow(x - 1.0, 2.0); }
+// the whole word; while letters pop in, each one is scaled by its own progress
+float mapFull(vec3 p) {
+  p = uRot * p;
+  float k = 1.0;
+  if (uMode == 1) { float s = clamp((uProg - when(p.xy)) / uDur, 0.0, 1.0); k = s <= 0.0 ? 0.0 : backOut(s); }
+  float dd = d2(p.xy) - uGrow * k + uR * k + (1.0 - k) * uHw;
+  return length(vec2(max(dd, 0.0), p.z)) - uR * k + max(1.0 - k, 0.0) * 0.02;   // fully gone before its turn
+}
+// the rounded nib at the end of the stroke being written
+float mapCap(vec3 p) {
+  if (uTip.w < 0.5) return 1e3;
+  p = uRot * p;
+  vec2 q = (p.xy - uTip.xy) * (uR / uTip.z);
+  return (length(vec3(q, p.z)) - uR) * min(uTip.z / uR, 1.0);
+}
+bool written(vec3 p) { if (uMode != 2) return true; p = uRot * p; return when(p.xy) <= uProg; }
+vec3 nrmFull(vec3 p) {
   vec2 e = vec2(0.0025, 0.0);
-  return normalize(vec3(map(p + e.xyy) - map(p - e.xyy), map(p + e.yxy) - map(p - e.yxy), map(p + e.yyx) - map(p - e.yyx)));
+  return normalize(vec3(mapFull(p + e.xyy) - mapFull(p - e.xyy), mapFull(p + e.yxy) - mapFull(p - e.yxy), mapFull(p + e.yyx) - mapFull(p - e.yyx)));
+}
+vec3 nrmCap(vec3 p) {
+  vec2 e = vec2(0.0025, 0.0);
+  return normalize(vec3(mapCap(p + e.xyy) - mapCap(p - e.xyy), mapCap(p + e.yxy) - mapCap(p - e.yxy), mapCap(p + e.yyx) - mapCap(p - e.yyx)));
 }
 void main() {
   vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
   vec3 col = pushed(vUv);
   vec3 ro = vec3(0.0, 0.0, 3.2), rd = normalize(vec3(p * 0.62, -1.0));
   float t = 2.5, dmin = 1e9, tmin = 2.5;
-  bool hit = false;
-  for (int i = 0; i < 90; i++) {
-    float d = map(ro + rd * t);
-    if (d < dmin) { dmin = d; tmin = t; }
-    if (d < 0.0006) { hit = true; break; }
-    t += d * 0.85;
+  bool hit = false, onCap = false;
+  for (int i = 0; i < 128; i++) {
+    vec3 pos = ro + rd * t;
+    float d = mapFull(pos), dc = mapCap(pos);
+    bool vis = written(pos);
+    float dv = vis ? d : 1e3, dh = min(dv, dc);
+    if (dh < dmin) { dmin = dh; tmin = t; onCap = dc < dv; }
+    if (dh < 0.0006) { hit = true; break; }
+    // not written yet: keep going (slowly while inside the unwritten glass)
+    float stepLen = vis ? d : max(d, 0.006);
+    t += min(stepLen, dc) * 0.85;
     if (t > 4.0) break;
   }
   float pxw = 3.2 * 0.62 / uRes.y;
   float a = hit ? 1.0 : 1.0 - smoothstep(0.0, pxw * 1.5, dmin);
   if (a > 0.0) {
-    vec3 pos = ro + rd * tmin, n = nrm(pos), v = -rd;
+    vec3 pos = ro + rd * tmin, n = onCap ? nrmCap(pos) : nrmFull(pos), v = -rd;
     float ndv = clamp(dot(n, v), 0.0, 1.0), fres = pow(1.0 - ndv, 3.0);
     vec3 op = uRot * pos;
     vec3 tint = mix(vec3(0.97, 0.47, 0.36), vec3(1.0, 0.76, 0.42), smoothstep(-0.38, 0.32, op.y));
@@ -441,7 +935,9 @@ void main() {
     float s1 = pow(max(dot(reflect(-normalize(uLight), n), v), 0.0), 120.0) * 3.4;
     float s2 = pow(max(dot(reflect(-normalize(vec3(0.7, -0.5, 0.6)), n), v), 0.0), 30.0) * 0.35;
     float sparkle = step(0.994, hash(floor(op.xy * 420.0) + floor(uTime * 3.0))) * pow(ndv, 4.0) * 0.9;
-    col = mix(col, body + vec3(1.0, 0.98, 0.94) * (s1 + s2 + sparkle), a);
+    // the nib glows while it writes
+    float nib = onCap ? 0.35 + 2.6 * pow(ndv, 6.0) : 0.0;
+    col = mix(col, body + vec3(1.0, 0.98, 0.94) * (s1 + s2 + sparkle + nib), a);
   }
   o = vec4(col, 1.0);
 }`;
@@ -470,40 +966,112 @@ void main() {
       PS = prog(VS, SCENE); PP = prog(VS, POST);
     } catch (e) { console.warn(e); return fail(stage); }
 
-    const distTex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, distTex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, DW, DH, 0, gl.RED, gl.FLOAT, new Float32Array(DW * DH).fill(4000));
-
-    let buildId = 0;
-    async function setText(raw) {
-      const text = raw.trim(), id = ++buildId;
-      if (text) {
-        try { await document.fonts.load(fontFor(CJK.test(text)), text); } catch (e) {}
-      }
-      if (id !== buildId) return;   // a newer keystroke won
-      const { field, r, grow } = distanceField(text);
-      gl.bindTexture(gl.TEXTURE_2D, distTex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, DW, DH, 0, gl.RED, gl.FLOAT, field);
-      R = r; GROW = grow;
+    function floatTexture(filter) {
+      const t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      return t;
     }
+    const distTex = floatTexture(gl.LINEAR), whenTex = floatTexture(gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, distTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, DW, DH, 0, gl.RED, gl.FLOAT, new Float32Array(N).fill(4000));
+    gl.bindTexture(gl.TEXTURE_2D, whenTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, DW, DH, 0, gl.RED, gl.FLOAT, new Float32Array(N));
+
+    /* ---- building and playing ---- */
     const card = stage.closest('.fx');
     const input = card.querySelector('.glass-input input');
-    const chips = card.querySelector('.font-chips');
-    chips.innerHTML = FONTS.map((f, i) => `<button type="button" role="radio" aria-checked="${i === 0}" data-k="${f.key}"><b style="font-family:'${f.css}';font-weight:${f.weight}">${f.name}</b><small>${f.note}</small></button>`).join('');
-    chips.addEventListener('click', (e) => {
-      const b = e.target.closest('button');
-      if (!b) return;
-      font = FONTS.find((f) => f.key === b.dataset.k);
-      chips.querySelectorAll('button').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
-      setText(input.value);
+    const note = card.querySelector('.glass-note');
+    const playBtn = card.querySelector('.play-btn');
+    let buildId = 0;
+    async function rebuild() {
+      const text = input.value.trim(), id = ++buildId;
+      anim = null;
+      let g;
+      if (mode.key === 'order') g = await layoutHand(text);
+      else {
+        if (text) { try { await document.fonts.load(fontFor(CJK.test(text)), text); } catch (e) {} }
+        if (id !== buildId) return false;
+        g = layoutFont(text);
+      }
+      if (id !== buildId) return false;   // a newer edit won
+      buildField(g);
+      gl.bindTexture(gl.TEXTURE_2D, distTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, DW, DH, 0, gl.RED, gl.FLOAT, g.field);
+      R = g.rPx * PX; GROW = g.growPx * PX;
+      g.anims = {};
+      geo = g;
+      return true;
+    }
+    let ready = rebuild();
+    async function play() {
+      await ready;
+      const want = mode.key === 'order' ? 'hand' : 'font';
+      if (!geo || geo.kind !== want) { ready = rebuild(); if (!(await ready)) return; }
+      const g = geo;
+      if (!(mode.key in g.anims)) {
+        g.anims[mode.key] = mode.key === 'pop' ? letterTimes(g) : penTimes(g, mode.key === 'trace' ? traceStrokes(g) : g.strokes);
+      }
+      const a = g.anims[mode.key];
+      if (!a || g !== geo) return;
+      gl.bindTexture(gl.TEXTURE_2D, whenTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, DW, DH, 0, gl.RED, gl.FLOAT, a.time);
+      anim = { a, start: performance.now() / 1000 };
+    }
+
+    /* ---- controls: two dropdowns and a play button ---- */
+    function dropdown(root, label, items, value, onChange) {
+      const id = root.dataset.dd;
+      root.innerHTML = `<button class="dd-btn" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="label">${label}</span><span class="dd-val"></span><svg class="dd-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
+        + `<ul class="dd-list" role="listbox" tabindex="-1" aria-label="${label}" hidden>${items.map((it) => `<li role="option" id="${id}-${it.key}" data-k="${it.key}"><b style="${it.style || ''}">${it.name}</b><small>${it.note}</small></li>`).join('')}</ul>`;
+      const btn = root.querySelector('.dd-btn'), list = root.querySelector('.dd-list'), val = root.querySelector('.dd-val'), opts = [...list.children];
+      let cur = Math.max(0, items.findIndex((it) => it.key === value)), active = cur, override = '';
+      const render = () => {
+        const it = items[cur];
+        val.innerHTML = override ? `<b>${override}</b>` : `<b style="${it.style || ''}">${it.name}</b>`;
+        opts.forEach((o, i) => { o.setAttribute('aria-selected', String(i === cur)); o.classList.toggle('is-active', i === active); });
+        list.setAttribute('aria-activedescendant', opts[active].id);
+      };
+      const open = () => { if (btn.disabled) return; active = cur; render(); list.hidden = false; btn.setAttribute('aria-expanded', 'true'); list.focus(); opts[active].scrollIntoView({ block: 'nearest' }); };
+      const close = (focus) => { list.hidden = true; btn.setAttribute('aria-expanded', 'false'); if (focus) btn.focus(); };
+      const choose = (i) => { const changed = i !== cur; cur = i; render(); close(true); if (changed) onChange(items[i].key); };
+      btn.addEventListener('click', () => (list.hidden ? open() : close(false)));
+      btn.addEventListener('keydown', (e) => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); open(); } });
+      list.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') active = Math.min(items.length - 1, active + 1);
+        else if (e.key === 'ArrowUp') active = Math.max(0, active - 1);
+        else if (e.key === 'Home') active = 0;
+        else if (e.key === 'End') active = items.length - 1;
+        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(active); return; }
+        else if (e.key === 'Escape') { e.preventDefault(); close(true); return; }
+        else if (e.key === 'Tab') { close(false); return; }
+        else return;
+        e.preventDefault(); render(); opts[active].scrollIntoView({ block: 'nearest' });
+      });
+      list.addEventListener('click', (e) => { const o = e.target.closest('[role="option"]'); if (o) choose(opts.indexOf(o)); });
+      list.addEventListener('pointermove', (e) => { const o = e.target.closest('[role="option"]'); if (o && opts.indexOf(o) !== active) { active = opts.indexOf(o); render(); } });
+      document.addEventListener('pointerdown', (e) => { if (!list.hidden && !root.contains(e.target)) close(false); });
+      render();
+      return { setDisabled(d, text) { btn.disabled = d; override = d ? text : ''; if (d) close(false); render(); } };
+    }
+    const fontDD = dropdown(card.querySelector('[data-dd="font"]'), 'Font',
+      FONTS.map((f) => ({ key: f.key, name: f.name, note: f.note, style: `font-family:'${f.css}';font-weight:${f.weight}` })), font.key,
+      (k) => { font = FONTS.find((f) => f.key === k); ready = rebuild(); });
+    dropdown(card.querySelector('[data-dd="mode"]'), 'Write-on', MODES, mode.key, (k) => {
+      const wasHand = mode.key === 'order';
+      mode = MODES.find((m) => m.key === k);
+      const isHand = mode.key === 'order';
+      fontDD.setDisabled(isHand, 'Single-line hand');
+      note.hidden = !isHand;
+      if (wasHand !== isHand) ready = rebuild();
+      play();
     });
+    playBtn.addEventListener('click', () => play());
     let typing = 0;
-    input.addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(() => setText(input.value), 160); });
-    setText(input.value);
+    input.addEventListener('input', () => { clearTimeout(typing); anim = null; typing = setTimeout(() => { ready = rebuild(); }, 180); });
 
     let hdr = null;
     const allocHdr = () => { if (hdr) hdr.free(); hdr = makeTarget(gl, canvas.width, canvas.height, gl.RGBA16F, gl.RGBA, true); };
@@ -513,17 +1081,18 @@ void main() {
     const tilt = { x: 0, y: 0 };
     const rot = new Float32Array(9);
     function setRot(ax, ay, az) {
-      const cx = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay), cz = Math.cos(az), sz = Math.sin(az);
+      const cxr = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay), cz = Math.cos(az), sz = Math.sin(az);
       // Rz * Rx * Ry, column-major
-      const m = [
-        cy * cz - sx * sy * sz, cy * sz + sx * sy * cz, -cx * sy,
-        -cx * sz, cx * cz, sx,
-        sy * cz + sx * cy * sz, sy * sz - sx * cy * cz, cx * cy
-      ];
-      rot.set(m);
+      rot.set([
+        cy * cz - sx * sy * sz, cy * sz + sx * sy * cz, -cxr * sy,
+        -cxr * sz, cxr * cz, sx,
+        sy * cz + sx * cy * sz, sy * sz - sx * cy * cz, cxr * cy
+      ]);
     }
     const PAL = { top: [0.71, 0.83, 0.93], bot: [0.82, 0.9, 0.95], beam: [1.0, 0.97, 0.88] };
+    let shown = false;
     register(stage, {
+      onShow() { if (!shown) { shown = true; play(); } },
       resize() { if (fit(canvas, 1.25).changed) { fluid.alloc(); allocHdr(); } },
       tick(dt, time) {
         st.each((x, y, dx, dy) => fluid.splat(x, y, dx * fluid.aspect * 5200, dy * 5200, null));
@@ -535,16 +1104,31 @@ void main() {
         tilt.x += (tx - tilt.x) * k; tilt.y += (ty - tilt.y) * k;
         setRot(tilt.y * 0.5 + Math.sin(time * 0.7) * 0.03, -tilt.x * 0.7, Math.sin(time * 0.5) * 0.02);
 
+        let modeU = 0, progU = 0, durU = 0.6, hwU = 0, tip = null;
+        if (anim) {
+          const el = performance.now() / 1000 - anim.start, a = anim.a;
+          if (el > a.total) anim = null;
+          else if (a.kind === 'pop') { modeU = 1; progU = el; durU = a.dur; hwU = a.hwW; }
+          else { modeU = 2; progU = el; tip = a.tipAt(el); }
+        }
+        playBtn.classList.toggle('is-playing', !!anim);
+
         let u = (gl.useProgram(PS.p), PS.u);
         gl.uniform2f(u.uRes, hdr.w, hdr.h);
         gl.uniform1f(u.uTime, time);
         gl.uniform3fv(u.uSkyTop, PAL.top); gl.uniform3fv(u.uSkyBot, PAL.bot); gl.uniform3fv(u.uBeam, PAL.beam);
         gl.uniform1i(u.uVel, bindTex(gl, 0, fluid.vel));
         gl.uniform1i(u.uDist, bindTex(gl, 1, distTex));
-        gl.uniform4f(u.uBox, -BOX_W / 2, -BOX_W * DH / DW / 2, BOX_W, BOX_W * DH / DW);
-        gl.uniform1f(u.uPx, BOX_W / DW);
+        gl.uniform1i(u.uWhen, bindTex(gl, 2, whenTex));
+        gl.uniform4f(u.uBox, -BOX_W / 2, -BOX_H / 2, BOX_W, BOX_H);
+        gl.uniform1f(u.uPx, PX);
         gl.uniform1f(u.uR, R);
         gl.uniform1f(u.uGrow, GROW);
+        gl.uniform1i(u.uMode, modeU);
+        gl.uniform1f(u.uProg, progU);
+        gl.uniform1f(u.uDur, durU);
+        gl.uniform1f(u.uHw, hwU);
+        gl.uniform4f(u.uTip, tip ? tip[0] : 0, tip ? tip[1] : 0, tip ? tip[2] : 1, tip ? 1 : 0);
         gl.uniformMatrix3fv(u.uRot, false, rot);
         gl.uniform3f(u.uLight, -0.45 + tilt.x * 1.2, 0.75 - tilt.y * 0.8, 0.55);
         blitTo(kit, canvas, hdr);
