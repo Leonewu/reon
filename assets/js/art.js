@@ -389,9 +389,68 @@
     ctx.fillText('VOL. 01', m + gw * 5, h * 0.95);
   };
 
+  /* Typer: lamplit paper; the carriage types a line while its light follows */
+  ART.typer = (ctx, w, h, t) => {
+    fill(ctx, w, h, '#1c1915');
+    const u = Math.min(w, h * 1.4) / 100;
+    const pw = Math.min(w * 0.82, 72 * u), px = (w - pw) / 2, py = h * 0.12, ph = h * 0.88 - py;
+    const railY = py + ph * 0.66;
+    // paper: arched top, square foot
+    ctx.beginPath();
+    ctx.moveTo(px, py + ph);
+    ctx.lineTo(px, py + ph * 0.32);
+    ctx.bezierCurveTo(px, py, px + pw * 0.2, py, px + pw / 2, py);
+    ctx.bezierCurveTo(px + pw * 0.8, py, px + pw, py, px + pw, py + ph * 0.32);
+    ctx.lineTo(px + pw, py + ph);
+    ctx.closePath();
+    ctx.fillStyle = '#504f44'; ctx.fill();
+    ctx.save(); ctx.clip();
+
+    const lines = ['A little light', 'for your thoughts.'];
+    const total = lines[0].length + lines[1].length;
+    const n = Math.floor(t * 7) % (total + 24);
+    const typed = Math.min(n, total);
+    const size = 3.4 * u, lh = size * 1.5, lx = px + pw * 0.16;
+    ctx.font = `400 ${size}px "Courier Prime", "Courier New", monospace`;
+    const cw = ctx.measureText('M').width;
+    const row = typed > lines[0].length ? 1 : 0;
+    const col = row ? typed - lines[0].length : typed;
+    const caretX = lx + col * cw, caretY = railY - size * 0.6;
+
+    // lamp cone rising from the carriage
+    const reach = ph * 0.6;
+    const g = ctx.createRadialGradient(caretX, railY, 2, caretX, railY - u * 3, reach);
+    g.addColorStop(0, 'rgba(255,225,161,.62)');
+    g.addColorStop(0.18, 'rgba(246,211,144,.42)');
+    g.addColorStop(0.55, 'rgba(222,193,143,.16)');
+    g.addColorStop(1, 'rgba(222,193,143,0)');
+    ctx.fillStyle = g;
+    ctx.filter = `blur(${(u * 1.6).toFixed(1)}px)`;
+    ctx.beginPath(); ctx.moveTo(caretX, railY);
+    ctx.arc(caretX, railY, reach, -Math.PI / 2 - 0.95, -Math.PI / 2 + 0.95);
+    ctx.closePath(); ctx.fill();
+    ctx.filter = 'none';
+
+    // finished lines scroll up above the rail
+    ctx.fillStyle = '#cec3ac';
+    const shown = row ? [lines[0], lines[1].slice(0, col)] : [lines[0].slice(0, col)];
+    shown.forEach((s, i) => ctx.fillText(s, lx, caretY - (shown.length - 1 - i) * lh));
+    if (Math.floor(t * 2.4) % 2 || n < total) { ctx.fillStyle = acc(); ctx.fillRect(caretX, caretY - size * 0.8, cw * 0.12, size); }
+    ctx.restore();
+
+    // rail and carriage
+    ctx.fillStyle = '#2a2722'; ctx.fillRect(px - u * 2, railY + u * 0.8, pw + u * 4, u * 1.2);
+    ctx.fillStyle = '#3b3830'; rr(ctx, caretX - u * 4, railY, u * 8, u * 3.2, u * 1.6); ctx.fill();
+    ctx.fillStyle = '#8e9e74'; ctx.beginPath(); ctx.arc(caretX - u * 1.8, railY + u * 1.6, u * 0.45, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#e6a459'; ctx.beginPath(); ctx.arc(caretX, railY + u * 1.6, u * 0.45, 0, TAU); ctx.fill();
+
+    ctx.fillStyle = '#888d7e'; ctx.font = `500 ${w * 0.018}px ${MONO}`;
+    ctx.fillText('TYPER / PAPER & LIGHT', w * 0.04, h * 0.06);
+    ctx.textAlign = 'right'; ctx.fillText(`${typed} / 3 000`, w * 0.96, h * 0.06); ctx.textAlign = 'left';
+  };
 
   // starting time per art, picked so the static frame looks composed
-  ART.defaults = { motion: 1.55, pictogram: 3.2, palette: 18.4, zine: 4.3, orbit: 0.4 };
+  ART.defaults = { typer: 3.6, motion: 1.55, pictogram: 3.2, palette: 18.4, zine: 4.3, orbit: 0.4 };
 
   window.ART = ART;
 })();

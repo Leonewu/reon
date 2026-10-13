@@ -13,6 +13,21 @@ window.SITE = {
   /* Shown in this order in the work index. */
   projects: [
     {
+      slug: 'typer',
+      title: 'Typer',
+      year: '2026',
+      art: 'typer',
+      role: 'Design & engineering',
+      type: 'Interactive',
+      status: 'Live',
+      demo: 'https://typer-paper-light.venusglow.workers.dev/',
+      summary: 'An illuminated typewriter for slow writing: a lamp rides the carriage, smoke drifts over the rail, and every key lands with a synthesized clack.',
+      body: [
+        'Typer is a small writing object. The light follows the caret across the page, the carriage stamps down on each keystroke and sparks across its contact gap on a carriage return. The sound is synthesized per key, so no two strikes are quite the same.',
+        'When a draft is ready it can be sealed into a one-time letter: encrypted in the browser, stored on a Cloudflare Durable Object, and destroyed the moment it is opened. It is plain JavaScript and canvas, with no framework and no build step.'
+      ]
+    },
+    {
       slug: 'fieldnote',
       title: 'Fieldnote™',
       year: '2024–2026',

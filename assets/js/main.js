@@ -93,6 +93,8 @@
     const meta = $('meta[name="theme-color"]');
     if (meta) meta.content = `rgb(${cs.getPropertyValue('--paper-rgb').trim().split(/\s+/).join(',')})`;
     if (window.ART) window.ART.accent = cs.getPropertyValue('--accent').trim();
+    // embedded live demos mirror the site theme
+    $$('iframe[data-demo]').forEach((f) => f.contentWindow && f.contentWindow.postMessage({ type: 'reon:theme', theme: root.dataset.theme }, new URL(f.src).origin));
     Backdrop.refresh(instant);
     if (Art.items.length) Art.redraw();
   }
@@ -405,7 +407,15 @@
           ${meta.map((m) => `<div><dt class="label">${esc(m[0])}</dt><dd>${esc(m[1])}</dd></div>`).join('')}
         </dl>
       </section>
-      <figure class="p-cover" data-reveal><div class="media"><canvas data-art="${esc(p.art)}" data-animate></canvas></div></figure>
+      ${p.demo ? `
+      <figure class="p-cover p-demo" data-reveal>
+        <div class="media">
+          <canvas data-art="${esc(p.art)}" data-animate></canvas>
+          <button class="p-demo-start" type="button"><span class="label">Live demo</span><span class="p-demo-cta">Try it here <span class="arrow">→</span></span></button>
+        </div>
+        <figcaption class="p-demo-bar label"><span>Interactive — click the paper and type</span><a class="u" href="${esc(p.demo)}" target="_blank" rel="noopener">Open full screen ↗</a></figcaption>
+      </figure>` : `
+      <figure class="p-cover" data-reveal><div class="media"><canvas data-art="${esc(p.art)}" data-animate></canvas></div></figure>`}
       <section class="section p-body">
         <header class="section-head"><span class="label">(01)</span><span class="label">Overview</span></header>
         <div class="grid12"><div class="p-text">${(p.body || []).map((t) => `<p data-reveal>${esc(t)}</p>`).join('')}</div></div>
@@ -418,6 +428,29 @@
         <span class="label">Next project</span>
         <span class="p-next-title">${esc(next.title)} <span class="arrow">→</span></span>
       </a>`;
+    if (p.demo) initDemo(main.querySelector('.p-demo'), p);
+  }
+
+  // Live demos load only on request: keeps the page light, and the click
+  // that starts one is the gesture the embed needs for audio.
+  function initDemo(fig, p) {
+    const media = fig.querySelector('.media'), start = fig.querySelector('.p-demo-start');
+    start.addEventListener('click', () => {
+      const url = new URL(p.demo);
+      url.searchParams.set('embed', '1');
+      url.searchParams.set('theme', root.dataset.theme);
+      const frame = document.createElement('iframe');
+      frame.src = url.href;
+      frame.title = `${p.title} — live demo`;
+      frame.dataset.demo = '';
+      frame.addEventListener('load', () => {
+        media.classList.add('is-live');
+        frame.focus();
+      }, { once: true });
+      media.classList.add('is-loading');
+      start.disabled = true;
+      media.append(frame);
+    });
   }
 
   /* ---------- Boot ---------- */
