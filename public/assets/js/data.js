@@ -38,8 +38,8 @@ window.SITE = {
       links: [{ label: 'readonon.com', href: 'https://readonon.com/' }],
       summary: 'A quiet web clipper: highlight a passage, keep it as plain text, and find your marks again the next time you visit the page.',
       body: [
-        'Readon (阅安, roughly "read, and be at ease") starts from a right-click. The extension saves the selected text with its note and tags, and when you come back to the article it finds the passage again and repaints the highlight. When a page has changed too much to be sure, it skips the mark rather than guess.',
-        'Behind it sits a Cloudflare Worker and D1, with per-account isolation, deduplication and a sync lock. Clippings can also go to Notion or Feishu, which takes one pasted token or one OAuth round trip, and to Apple Notes through a small native helper on the Mac. The library and landing page are plain JavaScript with no framework.'
+        'Readon (阅安, roughly "read, and be at ease") starts from a right-click. Select a passage, add a note or a tag, and it is kept as plain text. Come back to the article later and your highlights are painted back where you left them. When a page has changed too much to be sure, Readon leaves the mark out rather than guess.',
+        'Everything lands in one library you can search, annotate and tidy. If you already live in Notion, Feishu or Apple Notes, clippings can follow you there, and connecting takes a single step instead of a setup guide.'
       ]
     },
     {
@@ -48,12 +48,13 @@ window.SITE = {
       year: '2026',
       art: 'twincaption',
       role: 'Design & engineering',
-      type: 'Browser extension',
-      status: 'Beta',
+      type: 'Chrome extension',
+      status: 'Live',
+      links: [{ label: 'Chrome Web Store', href: 'https://chromewebstore.google.com/detail/elffojcnjanonmkcepbkilfgdnjpjoni' }],
       summary: 'Bilingual YouTube subtitles in one calm layer: the original and its translation, switching sentence by sentence with no flicker.',
       body: [
-        'Most dual-subtitle tools scrape the rolling captions on screen, so lines jitter word by word. TwinCaption reads the timed cues the player itself requests, then fetches the translated track aligned cue for cue. Each sentence and its translation appear together and leave together.',
-        'It is built to fail open. YouTube\'s own captions are hidden only once the overlay is actually drawing. A missing translation falls back to Google with bounded concurrency and a rate-limit cooldown, and if that fails too, the original line simply stays. The box can be dragged anywhere, works in fullscreen, and every line can be styled from a popup with a live preview.'
+        'Most dual-subtitle tools follow the captions as they roll across the screen, so lines jitter word by word. TwinCaption works a sentence at a time: each line and its translation appear together and leave together, so your eye can rest.',
+        'It is built to stay out of the way. If anything goes wrong, you see the original subtitles instead of an empty screen. The box can be dragged anywhere, works in fullscreen, and every line can be styled from a popup with a live preview. One button in the player turns it all off for videos with burned-in subtitles.'
       ]
     },
     {
