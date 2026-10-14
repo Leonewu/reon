@@ -28,6 +28,35 @@ window.SITE = {
       ]
     },
     {
+      slug: 'readon',
+      title: 'Readon 阅安',
+      year: '2026',
+      art: 'readon',
+      role: 'Design & engineering',
+      type: 'Chrome extension',
+      status: 'Live',
+      links: [{ label: 'readonon.com', href: 'https://readonon.com/' }],
+      summary: 'A quiet web clipper: highlight a passage, keep it as plain text, and find your marks again the next time you visit the page.',
+      body: [
+        'Readon (阅安, roughly "read, and be at ease") starts from a right-click. The extension saves the selected text with its note and tags, and when you come back to the article it finds the passage again and repaints the highlight. When a page has changed too much to be sure, it skips the mark rather than guess.',
+        'Behind it sits a Cloudflare Worker and D1, with per-account isolation, deduplication and a sync lock. Clippings can also go to Notion or Feishu, which takes one pasted token or one OAuth round trip, and to Apple Notes through a small native helper on the Mac. The library and landing page are plain JavaScript with no framework.'
+      ]
+    },
+    {
+      slug: 'twincaption',
+      title: 'TwinCaption',
+      year: '2026',
+      art: 'twincaption',
+      role: 'Design & engineering',
+      type: 'Browser extension',
+      status: 'Beta',
+      summary: 'Bilingual YouTube subtitles in one calm layer: the original and its translation, switching sentence by sentence with no flicker.',
+      body: [
+        'Most dual-subtitle tools scrape the rolling captions on screen, so lines jitter word by word. TwinCaption reads the timed cues the player itself requests, then fetches the translated track aligned cue for cue. Each sentence and its translation appear together and leave together.',
+        'It is built to fail open. YouTube\'s own captions are hidden only once the overlay is actually drawing. A missing translation falls back to Google with bounded concurrency and a rate-limit cooldown, and if that fails too, the original line simply stays. The box can be dragged anywhere, works in fullscreen, and every line can be styled from a popup with a live preview.'
+      ]
+    },
+    {
       slug: 'fieldnote',
       title: 'Fieldnote™',
       year: '2024–2026',

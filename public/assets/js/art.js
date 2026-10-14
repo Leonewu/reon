@@ -449,8 +449,108 @@
     ctx.textAlign = 'right'; ctx.fillText(`${typed} / 3 000`, w * 0.96, h * 0.06); ctx.textAlign = 'left';
   };
 
+  /* Readon: an article on warm paper; a highlight washes over one passage and is filed away */
+  ART.readon = (ctx, w, h, t) => {
+    fill(ctx, w, h, '#e6e7dc');
+    const u = w / 100;
+    const px = 14 * u, py = h * 0.1, pw = 72 * u, ph = h * 0.9;
+    ctx.save();
+    ctx.shadowColor = 'rgba(23,26,22,.12)'; ctx.shadowBlur = 5 * u; ctx.shadowOffsetY = 1.2 * u;
+    rr(ctx, px, py, pw, ph, 1.6 * u); ctx.fillStyle = '#fffdf8'; ctx.fill();
+    ctx.restore();
+    const ink = '#171a16', sage = '#91a488';
+    ctx.fillStyle = ink; ctx.font = `600 ${3.6 * u}px ${DISPLAY}`;
+    ctx.fillText('On reading slowly', px + 7 * u, py + 9 * u);
+    ctx.fillStyle = '#69775d'; ctx.font = `500 ${1.5 * u}px ${MONO}`;
+    ctx.fillText('ESSAY · 6 MIN', px + 7 * u, py + 4.2 * u);
+    // body copy as bars; one sentence (rows 3–5) is the passage being kept
+    const cycle = t % 6, sweep = ease(clamp((cycle - 0.6) / 1.4));
+    const widths = [58, 55, 57, 52, 56, 34, 0, 57, 54, 58, 49, 55, 31, 0, 56, 53, 57];
+    const rowH = 3.3 * u, top = py + 15 * u;
+    widths.forEach((bw, i) => {
+      if (!bw) return;
+      const y = top + i * rowH, x = px + 7 * u, len = bw * u;
+      ctx.fillStyle = 'rgba(23,26,22,.2)';
+      ctx.fillRect(x, y - 0.35 * u, len, 0.7 * u);
+      if (i >= 3 && i <= 5) {
+        const start = i === 3 ? 22 * u : 0;
+        const k = clamp(sweep * 3 - (i - 3));
+        if (k > 0) {
+          const span = (len - start) * k;
+          ctx.fillStyle = 'rgba(169,203,155,.55)';
+          rr(ctx, x + start - 0.6 * u, y - 1.3 * u, span + 1.2 * u, 2.6 * u, 0.5 * u); ctx.fill();
+          ctx.fillStyle = 'rgba(23,26,22,.6)';
+          ctx.fillRect(x + start, y - 0.35 * u, span, 0.7 * u);
+        }
+      }
+    });
+    // the saved card slides in from the right edge
+    const card = ease(clamp((cycle - 2.3) / 0.9)) * (1 - ease(clamp((cycle - 5.2) / 0.6)));
+    if (card > 0) {
+      const cw = 30 * u, ch = 15 * u, cx = w - (cw + 4 * u) * card, cy = h * 0.58;
+      ctx.save(); ctx.globalAlpha = card;
+      ctx.shadowColor = 'rgba(23,26,22,.18)'; ctx.shadowBlur = 4 * u; ctx.shadowOffsetY = u;
+      rr(ctx, cx, cy, cw, ch, 1.4 * u); ctx.fillStyle = '#171a16'; ctx.fill();
+      ctx.restore(); ctx.save(); ctx.globalAlpha = card;
+      ctx.fillStyle = sage; ctx.beginPath(); ctx.arc(cx + 3.6 * u, cy + 3.8 * u, 1 * u, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#f8f6f0'; ctx.font = `500 ${1.6 * u}px ${MONO}`;
+      ctx.fillText('SAVED TO READON', cx + 6 * u, cy + 4.4 * u);
+      ctx.fillStyle = 'rgba(248,246,240,.5)';
+      [22, 19, 12].forEach((lw, i) => ctx.fillRect(cx + 3 * u, cy + (7.6 + i * 2.2) * u, lw * u, 0.6 * u));
+      ctx.fillStyle = acc(); rr(ctx, cx + 3 * u, cy + 13.6 * u - 2.2 * u, 7 * u, 1.6 * u, 0.8 * u); ctx.fill();
+      ctx.restore();
+    }
+  };
+
+  /* TwinCaption: a video frame with two subtitle lines that change together, sentence by sentence */
+  ART.twincaption = (ctx, w, h, t) => {
+    const g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, '#1d2b3a'); g.addColorStop(0.55, '#3b4a52'); g.addColorStop(1, '#c98a5a');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    const u = w / 100;
+    // a soft horizon so the frame reads as footage
+    ctx.fillStyle = 'rgba(10,14,20,.55)';
+    ctx.beginPath(); ctx.moveTo(0, h * 0.62);
+    for (let x = 0; x <= w; x += w / 24) ctx.lineTo(x, h * (0.6 + 0.04 * Math.sin(x / w * 7 + 1.3)));
+    ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(w * 0.72, h * 0.4, 7 * u, 0, TAU); ctx.fillStyle = 'rgba(255,214,170,.55)'; ctx.fill();
+
+    const lines = [
+      ['The trick is to switch by sentence,', '诀窍是按整句切换，'],
+      ['not by word, so your eye can rest.', '而不是逐词跳动，眼睛才能休息。'],
+      ['Both lines arrive together.', '两行字幕同时出现。']
+    ];
+    const per = 2.4, k = Math.floor(t / per) % lines.length, local = (t % per) / per;
+    const fade = clamp(local / 0.08) * clamp((1 - local) / 0.08);
+    const [a, b] = lines[k];
+    ctx.font = `500 ${3.4 * u}px ${DISPLAY}`;
+    const wa = ctx.measureText(a).width;
+    ctx.font = `500 ${3 * u}px "PingFang SC", "Noto Sans SC", ${DISPLAY}`;
+    const wb = ctx.measureText(b).width;
+    const bw = Math.max(wa, wb) + 6 * u, bh = 11.5 * u, bx = (w - bw) / 2, by = h - 10 * u - bh;
+    ctx.save(); ctx.globalAlpha = fade;
+    rr(ctx, bx, by, bw, bh, 1.2 * u); ctx.fillStyle = 'rgba(8,10,14,.72)'; ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff'; ctx.font = `500 ${3.4 * u}px ${DISPLAY}`;
+    ctx.fillText(a, w / 2, by + 4.8 * u);
+    ctx.fillStyle = '#ffd59a'; ctx.font = `500 ${3 * u}px "PingFang SC", "Noto Sans SC", ${DISPLAY}`;
+    ctx.fillText(b, w / 2, by + 9.4 * u);
+    ctx.restore();
+
+    // player chrome: progress, and the toggle lit in the accent colour
+    const prog = ((t / (per * lines.length)) % 1) * 0.6 + 0.2;
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(4 * u, h - 6 * u, w - 8 * u, 0.5 * u);
+    ctx.fillStyle = '#ff3d3d'; ctx.fillRect(4 * u, h - 6 * u, (w - 8 * u) * prog, 0.5 * u);
+    ctx.beginPath(); ctx.arc(4 * u + (w - 8 * u) * prog, h - 5.75 * u, 0.9 * u, 0, TAU); ctx.fill();
+    const tx = w - 12 * u, ty = h - 4.2 * u;
+    rr(ctx, tx, ty, 3.6 * u, 2.4 * u, 0.5 * u); ctx.lineWidth = 0.35 * u; ctx.strokeStyle = acc(); ctx.stroke();
+    ctx.fillStyle = acc(); ctx.fillRect(tx + 0.8 * u, ty + 1 * u, 1 * u, 0.35 * u); ctx.fillRect(tx + 2 * u, ty + 1 * u, 0.9 * u, 0.35 * u);
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.font = `500 ${1.6 * u}px ${MONO}`; ctx.textAlign = 'left';
+    ctx.fillText('EN · 中文', 4 * u, h - 2.2 * u);
+  };
+
   // starting time per art, picked so the static frame looks composed
-  ART.defaults = { typer: 3.6, motion: 1.55, pictogram: 3.2, palette: 18.4, zine: 4.3, orbit: 0.4 };
+  ART.defaults = { typer: 3.6, readon: 3.4, twincaption: 1.2, motion: 1.55, pictogram: 3.2, palette: 18.4, zine: 4.3, orbit: 0.4 };
 
   window.ART = ART;
 })();

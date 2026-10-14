@@ -417,7 +417,7 @@ html:not(.js) .curtain, .curtain-failsafe .curtain { transform: translateY(-100%
 .p-summary { max-width: 30em; margin-top: 28px; font-family: var(--display); font-size: clamp(20px, 2vw, 30px); font-weight: 450; line-height: 1.3; letter-spacing: -.02em; color: var(--mute); }
 .p-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px var(--gap); margin-top: clamp(40px, 5vw, 72px); padding-top: 16px; border-top: 1px solid var(--line); font-size: 14px; }
 .p-meta dt { margin-bottom: 4px; }
-@media (min-width: 1024px) { .p-meta { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .p-meta { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); } }
 .p-cover { padding: 0 var(--pad); }
 .p-cover .media { aspect-ratio: 4 / 3; }
 @media (min-width: 768px) { .p-cover .media { aspect-ratio: 16 / 9; } }

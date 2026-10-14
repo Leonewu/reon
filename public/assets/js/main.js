@@ -405,6 +405,7 @@
         <p class="p-summary" data-reveal style="--d:150ms">${esc(p.summary)}</p>
         <dl class="p-meta" data-reveal style="--d:250ms">
           ${meta.map((m) => `<div><dt class="label">${esc(m[0])}</dt><dd>${esc(m[1])}</dd></div>`).join('')}
+          ${(p.links || []).map((l) => `<div><dt class="label">Link</dt><dd><a class="u" href="${esc(l.href)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a></dd></div>`).join('')}
         </dl>
       </section>
       ${p.demo ? `
