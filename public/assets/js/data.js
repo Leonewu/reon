@@ -20,7 +20,7 @@ window.SITE = {
       role: 'Design & engineering',
       type: 'Interactive',
       status: 'Live',
-      demo: 'https://typer-paper-light.venusglow.workers.dev/',
+      demo: 'https://typer.reon.day/',
       summary: 'An illuminated typewriter for slow writing: a lamp rides the carriage, smoke drifts over the rail, and every key lands with a synthesized clack.',
       body: [
         'Typer is a small writing object. The light follows the caret across the page, the carriage stamps down on each keystroke and sparks across its contact gap on a carriage return. The sound is synthesized per key, so no two strikes are quite the same.',

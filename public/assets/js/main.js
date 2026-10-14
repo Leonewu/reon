@@ -23,22 +23,22 @@
     document.body.insertAdjacentHTML('beforeend', `
       <header class="site-header">
         <span class="progress" aria-hidden="true"><i></i></span>
-        <a class="brand" href="index.html" aria-label="${esc(SITE.name)}, home"><span class="brand-name">${esc(SITE.name)}<i>.</i></span><span class="brand-role">${esc(SITE.role)}</span></a>
+        <a class="brand" href="/" aria-label="${esc(SITE.name)}, home"><span class="brand-name">${esc(SITE.name)}<i>.</i></span><span class="brand-role">${esc(SITE.role)}</span></a>
         <nav class="nav" aria-label="Primary">
-          <a class="nav-link" href="index.html#about" data-section="about"><span class="u">About</span></a>
-          <a class="nav-link" href="index.html#work" data-section="work"><span class="u">Work</span></a>
-          <a class="nav-link${page === 'studio' ? ' is-active' : ''}" href="studio.html"><span class="u">Studio</span></a>
-          <a class="nav-link" href="index.html#contact" data-section="contact"><span class="u">Contact</span></a>
+          <a class="nav-link" href="/#about" data-section="about"><span class="u">About</span></a>
+          <a class="nav-link" href="/#work" data-section="work"><span class="u">Work</span></a>
+          <a class="nav-link${page === 'studio' ? ' is-active' : ''}" href="/studio"><span class="u">Studio</span></a>
+          <a class="nav-link" href="/#contact" data-section="contact"><span class="u">Contact</span></a>
           ${themeBtn}
         </nav>
         <button class="menu-btn" type="button" aria-expanded="false" aria-controls="menu"><span class="u">Menu</span></button>
       </header>
       <div class="menu" id="menu" aria-hidden="true">
         <nav class="menu-nav" aria-label="Mobile">
-          <a href="index.html#about"><span class="label">01</span>About</a>
-          <a href="index.html#work"><span class="label">02</span>Work</a>
-          <a href="studio.html"><span class="label">03</span>Studio</a>
-          <a href="index.html#contact"><span class="label">04</span>Contact</a>
+          <a href="/#about"><span class="label">01</span>About</a>
+          <a href="/#work"><span class="label">02</span>Work</a>
+          <a href="/studio"><span class="label">03</span>Studio</a>
+          <a href="/#contact"><span class="label">04</span>Contact</a>
         </nav>
         <div class="menu-foot">${themeBtn}<a class="js-email-plain"></a></div>
       </div>`);
@@ -326,7 +326,7 @@
     const P = SITE.projects;
     list.innerHTML = P.map((p, i) => `
       <li class="work-row" data-reveal style="--d:${(i % 4) * 60}ms">
-        <a href="project.html?p=${encodeURIComponent(p.slug)}" data-index="${i}">
+        <a href="/project?p=${encodeURIComponent(p.slug)}" data-index="${i}">
           <span class="w-media" aria-hidden="true"><canvas data-art="${esc(p.art)}"></canvas></span>
           <span class="w-no">${pad(i + 1, 2)}</span>
           <span class="w-title">${esc(p.title)}</span>
@@ -400,7 +400,7 @@
     const meta = [['Year', p.year], ['Role', p.role], ['Type', p.type], ['Status', p.status]].filter((m) => m[1]);
     main.innerHTML = `
       <section class="p-head">
-        <div class="p-crumbs label"><a class="u" href="index.html#work">← All work</a><span>${pad(idx + 1, 2)} / ${pad(list.length, 2)}</span></div>
+        <div class="p-crumbs label"><a class="u" href="/#work">← All work</a><span>${pad(idx + 1, 2)} / ${pad(list.length, 2)}</span></div>
         <h1 class="p-title" data-reveal="lines"><span class="line"><span>${esc(p.title)}</span></span></h1>
         <p class="p-summary" data-reveal style="--d:150ms">${esc(p.summary)}</p>
         <dl class="p-meta" data-reveal style="--d:250ms">
@@ -424,7 +424,7 @@
         <figure data-reveal><div class="media"><canvas data-art="${esc(p.art)}" data-t="3.3"></canvas></div></figure>
         <figure data-reveal style="--d:120ms"><div class="media"><canvas data-art="${esc(p.art)}" data-t="7.9"></canvas></div></figure>
       </section>
-      <a class="p-next" href="project.html?p=${encodeURIComponent(next.slug)}">
+      <a class="p-next" href="/project?p=${encodeURIComponent(next.slug)}">
         <span class="label">Next project</span>
         <span class="p-next-title">${esc(next.title)} <span class="arrow">→</span></span>
       </a>`;

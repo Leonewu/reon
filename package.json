@@ -1,0 +1,11 @@
+{
+  "name": "reon",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --port 8822",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.148.0"
+  }
+}

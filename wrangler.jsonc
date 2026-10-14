@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "reon",
+  "compatibility_date": "2026-10-09",
+  // Static site, no build step: public/ is served as-is.
+  "assets": { "directory": "./public" },
+  "routes": [{ "pattern": "reon.day", "custom_domain": true }],
+  "observability": { "enabled": true }
+}
